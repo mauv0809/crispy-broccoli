@@ -1,35 +1,94 @@
-# Value Investing Portfolio Manager (Go-Lith)
+# DeepValue
 
-## 📌 Project Overview
-This application is a monolithic "Value Investing" tool designed to manage a high-conviction portfolio of exactly 6 stocks. It ingests financial data, runs a fundamental analysis screener (Magic Formula style), and generates quarterly rebalancing instructions.
+A personal value investing portfolio manager that automates stock screening, backtesting, and rebalancing.
 
-**Primary Goal:** Automate the selection of high-quality companies (High ROIC) selling at a discount (Low EV/EBIT).
+## Overview
 
----
+DeepValue helps you:
+- Screen stocks using value investing strategies (Magic Formula, etc.)
+- Backtest strategies against historical data
+- Compare performance vs S&P 500
+- Generate percentage-based rebalancing instructions
 
-## 🛠 Tech Stack
-* **Language:** Go (Golang) 1.23+
-* **Database:** PostgreSQL 16
-* **Data Source:** Nasdaq Data Link (Sharadar Core US Fundamentals / SF1)
-* **Web Server:** `Chi` or `net/http`
-* **Frontend:** `HTMX` (Interactivity) + `Templ` (Type-safe HTML)
-* **Styling:** TailwindCSS (via CDN)
-* **Migrations:** `goose`
-* **Driver:** `pgx/v5`
+**Strategy:** Buy high-quality companies (High ROIC) at a discount (Low EV/EBIT).
 
----
+## Tech Stack
 
-## 📂 Project Structure
-Maintain the following standard Go project layout:
+| Component | Choice |
+|-----------|--------|
+| Language | Go 1.23+ |
+| Database | PostgreSQL 18 |
+| Web Framework | Echo |
+| Templates | Templ |
+| Frontend | HTMX |
+| Styling | Tailwind 4 + Catppuccin |
+| Migrations | Goose (embedded) |
+| Data Source | Nasdaq Data Link (Sharadar SF1) |
 
-```text
-/cmd/app/           # Main entry point
-/internal
-    /db             # Database connection (pgxpool)
-    /ingest         # Sharadar API JSON parsing & ingestion
-    /models         # Go structs matching DB tables
-    /analysis       # Screening & Ranking logic
-    /handlers       # HTTP Handlers (Dashboard, Actions)
-    /views          # Templ (.templ) UI components
-/sql/migrations     # Goose SQL migration files
-docker-compose.yml  # Local Dev Infrastructure
+## Quick Start
+
+```bash
+# First time setup
+make setup          # Install npm deps + Go tools
+
+# Start services
+make db-up          # Start Postgres + pgweb
+
+# Run the app
+make dev            # Start with hot reload
+```
+
+**URLs:**
+- App: http://localhost:8080
+- pgweb (DB UI): http://localhost:8081
+
+## Environment Variables
+
+Copy `.env.example` to `.env` and configure:
+
+```bash
+DATABASE_URL=postgres://value_user:value_pass@localhost:5432/value_db?sslmode=disable
+PORT=8080
+NASDAQ_API_KEY=your-api-key-here
+```
+
+## Project Structure
+
+```
+cmd/app/                    # Entry point
+internal/
+    db/                     # Database connection + migrations
+        migrations/         # SQL migration files
+    models/                 # Go structs
+    handlers/               # HTTP handlers
+    views/                  # Templ components
+assets/
+    css/                    # Tailwind input/output
+docker-compose.yml          # Postgres + pgweb
+Makefile                    # Build commands
+```
+
+## Make Commands
+
+```bash
+make build          # Build binary
+make run            # Run app
+make dev            # Run with hot reload (Air)
+make db-up          # Start Postgres
+make db-down        # Stop Postgres
+make migrate-create # Create new migration
+make css-build      # Build Tailwind CSS
+make css-watch      # Watch CSS changes
+make templ-generate # Generate templ files
+make setup          # First-time setup
+```
+
+## Theme
+
+DeepValue uses Catppuccin with 4 flavors:
+- **Latte** (light)
+- **Frappe** (medium dark)
+- **Macchiato** (darker)
+- **Mocha** (darkest, default)
+
+Toggle themes via the dropdown in the nav bar.
