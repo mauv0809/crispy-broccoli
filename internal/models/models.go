@@ -75,3 +75,26 @@ type DailyPrice struct {
 	LastUpdated     *time.Time      `json:"last_updated"` // From Sharadar API
 	CreatedAt       time.Time       `json:"created_at"`
 }
+
+type Benchmark struct {
+	Ticker      string    `json:"ticker"`
+	Name        string    `json:"name"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type BenchmarkPrice struct {
+	ID          int             `json:"id"`
+	Ticker      string          `json:"ticker"`
+	Date        time.Time       `json:"date"`
+	Open        decimal.Decimal `json:"open"`
+	High        decimal.Decimal `json:"high"`
+	Low         decimal.Decimal `json:"low"`
+	Close       decimal.Decimal `json:"close"`
+	Volume      int64           `json:"volume"`
+	Dividends   decimal.Decimal `json:"dividends"`
+	CloseUnadj  decimal.Decimal `json:"close_unadj"`
+	LastUpdated *time.Time      `json:"last_updated"`
+	CreatedAt   time.Time       `json:"created_at"`
+}

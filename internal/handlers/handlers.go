@@ -15,6 +15,13 @@ func New() *Handler {
 	return &Handler{}
 }
 
+// Health returns application health status
+// @Summary Health check
+// @Description Returns the health status of the application
+// @Tags system
+// @Produce json
+// @Success 200 {object} map[string]string
+// @Router /health [get]
 func (h *Handler) Health(c echo.Context) error {
 	return c.JSON(http.StatusOK, map[string]string{
 		"status": "ok",
@@ -23,4 +30,8 @@ func (h *Handler) Health(c echo.Context) error {
 
 func (h *Handler) Index(c echo.Context) error {
 	return Render(c, http.StatusOK, views.Index())
+}
+
+func (h *Handler) Docs(c echo.Context) error {
+	return Render(c, http.StatusOK, views.Docs())
 }

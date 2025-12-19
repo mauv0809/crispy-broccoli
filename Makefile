@@ -1,11 +1,11 @@
-.PHONY: build run dev db-up db-down migrate-create templ-generate templ-watch css-build css-watch tools setup
+.PHONY: build run dev db-up db-down migrate-create templ-generate templ-watch css-build css-watch swagger tools setup
 
 # Build everything
-build: templ-generate css-build
+build: templ-generate css-build swagger
 	go build -o bin/app ./cmd/app
 
 # Run the application (migrations run automatically on startup)
-run: templ-generate css-build
+run: templ-generate css-build swagger
 	go run ./cmd/app
 
 # Run with live reload (requires air: go install github.com/air-verse/air@latest)
@@ -41,11 +41,16 @@ css-build:
 css-watch:
 	npm run css:watch
 
+# Generate swagger docs
+swagger:
+	swag init -g cmd/app/main.go --parseDependency --parseInternal
+
 # Install dev tools
 tools:
 	go install github.com/a-h/templ/cmd/templ@latest
 	go install github.com/pressly/goose/v3/cmd/goose@latest
 	go install github.com/air-verse/air@latest
+	go install github.com/swaggo/swag/cmd/swag@latest
 
 # First-time setup
 setup:

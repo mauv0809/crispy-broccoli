@@ -6,10 +6,11 @@
     "css:watch": "tailwindcss -i ./assets/css/input.css -o ./assets/css/output.css --watch"
   },
   "devDependencies": {
-    "@catppuccin/tailwindcss": "^1.0.0",
     "tailwindcss": "^4.1.18"
   },
   "dependencies": {
-    "@tailwindcss/cli": "^4.1.18"
+    "@tailwindcss/cli": "^4.1.18",
+    "alpinejs": "^3.15.3",
+    "daisyui": "^5.5.14"
   }
 }

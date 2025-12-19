@@ -1,0 +1,174 @@
+basePath: /
+definitions:
+  internal_handlers.IngestResponse:
+    properties:
+      count:
+        type: integer
+      elapsed:
+        type: string
+      message:
+        type: string
+      success:
+        type: boolean
+    type: object
+host: localhost:8080
+info:
+  contact: {}
+  description: Personal value investing portfolio manager API
+  title: DeepValue API
+  version: "1.0"
+paths:
+  /admin/ingest/benchmarks:
+    post:
+      consumes:
+      - application/json
+      description: Fetches daily data for configured benchmarks (e.g., SPY) from SHARADAR/DAILY
+      parameters:
+      - description: 'Fetch all history (default: incremental)'
+        in: query
+        name: full
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+      summary: Ingest benchmark prices
+      tags:
+      - ingestion
+  /admin/ingest/daily:
+    post:
+      consumes:
+      - application/json
+      description: Fetches daily price/fundamental data from SHARADAR/DAILY. If no
+        ticker specified, fetches for all DB companies.
+      parameters:
+      - description: Comma-separated tickers (defaults to all companies in DB)
+        in: query
+        name: ticker
+        type: string
+      - description: 'Fetch all history (default: incremental)'
+        in: query
+        name: full
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+      summary: Ingest daily prices
+      tags:
+      - ingestion
+  /admin/ingest/fundamentals:
+    post:
+      consumes:
+      - application/json
+      description: Fetches fundamental data from SHARADAR/SF1 and upserts into financial_metrics
+        table
+      parameters:
+      - description: Comma-separated tickers (defaults to all companies in DB)
+        in: query
+        name: ticker
+        type: string
+      - default: ARQ,MRQ
+        description: Comma-separated dimensions
+        in: query
+        name: dimension
+        type: string
+      - description: 'Fetch all history (default: incremental)'
+        in: query
+        name: full
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+      summary: Ingest financial metrics
+      tags:
+      - ingestion
+  /admin/ingest/status:
+    get:
+      description: Returns current data counts and last update timestamps
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      summary: Get ingestion status
+      tags:
+      - ingestion
+  /admin/ingest/tickers:
+    post:
+      consumes:
+      - application/json
+      description: Fetches company metadata from SHARADAR/TICKERS and upserts into
+        the companies table
+      parameters:
+      - description: Comma-separated tickers (defaults to all)
+        in: query
+        name: ticker
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+      summary: Ingest company tickers
+      tags:
+      - ingestion
+  /health:
+    get:
+      description: Returns the health status of the application
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Health check
+      tags:
+      - system
+swagger: "2.0"

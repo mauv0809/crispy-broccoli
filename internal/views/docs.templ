@@ -1,0 +1,475 @@
+package views
+
+templ Docs() {
+	@Layout("API Documentation") {
+		<div class="space-y-4">
+			<div class="flex items-center justify-between">
+				<h1 class="text-2xl font-bold text-primary">API Documentation</h1>
+				<a
+					href="/api/openapi.json"
+					target="_blank"
+					class="link link-hover text-sm opacity-70"
+				>
+					Download OpenAPI Spec
+				</a>
+			</div>
+			<div id="swagger-ui" class="rounded-lg overflow-hidden"></div>
+		</div>
+
+		<!-- Swagger UI Assets -->
+		<link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui.css"/>
+		<script src="https://unpkg.com/swagger-ui-dist@5.11.0/swagger-ui-bundle.js"></script>
+
+		<style>
+			/* Theme Swagger UI using daisyUI color variables */
+
+			#swagger-ui {
+				background: var(--color-base-200) !important;
+				padding: 1rem;
+			}
+
+			#swagger-ui .swagger-ui .topbar {
+				display: none;
+			}
+
+			/* Info section */
+			#swagger-ui .swagger-ui .info .title {
+				color: var(--color-primary) !important;
+			}
+
+			#swagger-ui .swagger-ui .info .title small {
+				background: var(--color-base-300) !important;
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .info .description p,
+			#swagger-ui .swagger-ui .info .description,
+			#swagger-ui .swagger-ui .info .base-url {
+				color: var(--color-base-content) !important;
+			}
+
+			/* Scheme container */
+			#swagger-ui .swagger-ui .scheme-container {
+				background: var(--color-base-200) !important;
+				box-shadow: none !important;
+			}
+
+			#swagger-ui .swagger-ui .servers-title,
+			#swagger-ui .swagger-ui .servers label,
+			#swagger-ui .swagger-ui .servers>label>select {
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .servers select {
+				background: var(--color-base-100) !important;
+				border: 1px solid var(--color-base-300) !important;
+				color: var(--color-base-content) !important;
+			}
+
+			/* Tags */
+			#swagger-ui .swagger-ui .opblock-tag {
+				color: var(--color-primary) !important;
+				border-bottom: 1px solid var(--color-base-300) !important;
+			}
+
+			#swagger-ui .swagger-ui .opblock-tag:hover {
+				background: var(--color-base-300) !important;
+			}
+
+			#swagger-ui .swagger-ui .opblock-tag small {
+				color: var(--color-base-content) !important;
+			}
+
+			/* Operation blocks */
+			#swagger-ui .swagger-ui .opblock {
+				border-radius: 8px !important;
+				margin: 0 0 10px 0 !important;
+				box-shadow: none !important;
+			}
+
+			#swagger-ui .swagger-ui .opblock .opblock-summary-method {
+				font-weight: 700 !important;
+				min-width: 80px !important;
+				padding: 6px 12px !important;
+				border-radius: 4px !important;
+			}
+
+			#swagger-ui .swagger-ui .opblock .opblock-summary-path,
+			#swagger-ui .swagger-ui .opblock .opblock-summary-path span {
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .opblock .opblock-summary-description {
+				color: var(--color-base-content) !important;
+			}
+
+			/* GET */
+			#swagger-ui .swagger-ui .opblock-get {
+				border: 1px solid var(--color-success) !important;
+				background: color-mix(in srgb, var(--color-success) 10%, var(--color-base-200)) !important;
+			}
+			#swagger-ui .swagger-ui .opblock-get .opblock-summary-method {
+				background: var(--color-success) !important;
+				color: var(--color-success-content) !important;
+			}
+			#swagger-ui .swagger-ui .opblock-get .opblock-summary {
+				border-color: var(--color-success) !important;
+			}
+
+			/* POST */
+			#swagger-ui .swagger-ui .opblock-post {
+				border: 1px solid var(--color-info) !important;
+				background: color-mix(in srgb, var(--color-info) 10%, var(--color-base-200)) !important;
+			}
+			#swagger-ui .swagger-ui .opblock-post .opblock-summary-method {
+				background: var(--color-info) !important;
+				color: var(--color-info-content) !important;
+			}
+			#swagger-ui .swagger-ui .opblock-post .opblock-summary {
+				border-color: var(--color-info) !important;
+			}
+
+			/* PUT */
+			#swagger-ui .swagger-ui .opblock-put {
+				border: 1px solid var(--color-warning) !important;
+				background: color-mix(in srgb, var(--color-warning) 10%, var(--color-base-200)) !important;
+			}
+			#swagger-ui .swagger-ui .opblock-put .opblock-summary-method {
+				background: var(--color-warning) !important;
+				color: var(--color-warning-content) !important;
+			}
+
+			/* DELETE */
+			#swagger-ui .swagger-ui .opblock-delete {
+				border: 1px solid var(--color-error) !important;
+				background: color-mix(in srgb, var(--color-error) 10%, var(--color-base-200)) !important;
+			}
+			#swagger-ui .swagger-ui .opblock-delete .opblock-summary-method {
+				background: var(--color-error) !important;
+				color: var(--color-error-content) !important;
+			}
+
+			/* PATCH */
+			#swagger-ui .swagger-ui .opblock-patch {
+				border: 1px solid var(--color-secondary) !important;
+				background: color-mix(in srgb, var(--color-secondary) 10%, var(--color-base-200)) !important;
+			}
+			#swagger-ui .swagger-ui .opblock-patch .opblock-summary-method {
+				background: var(--color-secondary) !important;
+				color: var(--color-secondary-content) !important;
+			}
+
+			/* Expanded body */
+			#swagger-ui .swagger-ui .opblock-body {
+				background: var(--color-base-100) !important;
+			}
+
+			#swagger-ui .swagger-ui .opblock-body pre,
+			#swagger-ui .swagger-ui .opblock-body pre.microlight {
+				background: var(--color-base-200) !important;
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .opblock-section-header {
+				background: var(--color-base-200) !important;
+				box-shadow: none !important;
+			}
+
+			#swagger-ui .swagger-ui .opblock-section-header h4,
+			#swagger-ui .swagger-ui .opblock-section-header label {
+				color: var(--color-base-content) !important;
+			}
+
+			/* Parameters */
+			#swagger-ui .swagger-ui .parameters-col_name,
+			#swagger-ui .swagger-ui .parameters-col_description,
+			#swagger-ui .swagger-ui .parameter__name {
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .parameter__name.required span,
+			#swagger-ui .swagger-ui .parameter__name.required::after {
+				color: var(--color-error) !important;
+			}
+
+			#swagger-ui .swagger-ui .parameter__type {
+				color: var(--color-success) !important;
+			}
+
+			#swagger-ui .swagger-ui .parameter__in {
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui table thead tr th,
+			#swagger-ui .swagger-ui table thead tr td {
+				color: var(--color-base-content) !important;
+				border-bottom: 1px solid var(--color-base-300) !important;
+			}
+
+			#swagger-ui .swagger-ui table tbody tr td {
+				color: var(--color-base-content) !important;
+				border-bottom: 1px solid var(--color-base-300) !important;
+			}
+
+			/* Inputs */
+			#swagger-ui .swagger-ui input[type="text"],
+			#swagger-ui .swagger-ui input[type="password"],
+			#swagger-ui .swagger-ui input[type="search"],
+			#swagger-ui .swagger-ui input[type="email"],
+			#swagger-ui .swagger-ui input[type="file"],
+			#swagger-ui .swagger-ui textarea,
+			#swagger-ui .swagger-ui select {
+				background: var(--color-base-100) !important;
+				border: 1px solid var(--color-base-300) !important;
+				color: var(--color-base-content) !important;
+				border-radius: 4px !important;
+			}
+
+			#swagger-ui .swagger-ui input:focus,
+			#swagger-ui .swagger-ui textarea:focus,
+			#swagger-ui .swagger-ui select:focus {
+				border-color: var(--color-primary) !important;
+				outline: none !important;
+			}
+
+			/* Buttons */
+			#swagger-ui .swagger-ui .btn {
+				border-radius: 4px !important;
+				font-weight: 600 !important;
+			}
+
+			#swagger-ui .swagger-ui .btn.execute {
+				background: var(--color-primary) !important;
+				border-color: var(--color-primary) !important;
+				color: var(--color-primary-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .btn.execute:hover {
+				background: var(--color-secondary) !important;
+				border-color: var(--color-secondary) !important;
+			}
+
+			#swagger-ui .swagger-ui .btn.cancel {
+				background: var(--color-neutral) !important;
+				border-color: var(--color-neutral) !important;
+				color: var(--color-neutral-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .try-out__btn {
+				border: 1px solid var(--color-primary) !important;
+				color: var(--color-primary) !important;
+				background: transparent !important;
+			}
+
+			#swagger-ui .swagger-ui .try-out__btn:hover {
+				background: color-mix(in srgb, var(--color-primary) 15%, transparent) !important;
+			}
+
+			/* Response section */
+			#swagger-ui .swagger-ui .responses-inner h4,
+			#swagger-ui .swagger-ui .responses-inner h5,
+			#swagger-ui .swagger-ui .response-col_status,
+			#swagger-ui .swagger-ui .response-col_description,
+			#swagger-ui .swagger-ui .response-col_links {
+				color: var(--color-base-content) !important;
+			}
+
+			/* Code blocks */
+			#swagger-ui .swagger-ui .highlight-code,
+			#swagger-ui .swagger-ui .microlight,
+			#swagger-ui .swagger-ui pre.microlight,
+			#swagger-ui .swagger-ui code {
+				background: var(--color-base-200) !important;
+				color: var(--color-base-content) !important;
+				border-radius: 6px !important;
+			}
+
+			/* Models section */
+			#swagger-ui .swagger-ui section.models {
+				border: 1px solid var(--color-base-300) !important;
+				border-radius: 8px !important;
+			}
+
+			#swagger-ui .swagger-ui section.models h4 {
+				color: var(--color-primary) !important;
+				border-bottom: 1px solid var(--color-base-300) !important;
+			}
+
+			#swagger-ui .swagger-ui section.models h4 span {
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .model-box {
+				background: var(--color-base-200) !important;
+			}
+
+			#swagger-ui .swagger-ui .model,
+			#swagger-ui .swagger-ui .model-title {
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .prop-type {
+				color: var(--color-success) !important;
+			}
+
+			#swagger-ui .swagger-ui .prop-format {
+				color: var(--color-base-content) !important;
+			}
+
+			/* Arrows and icons */
+			#swagger-ui .swagger-ui .expand-operation svg,
+			#swagger-ui .swagger-ui .expand-methods svg,
+			#swagger-ui .swagger-ui .arrow,
+			#swagger-ui .swagger-ui button svg {
+				fill: var(--color-base-content) !important;
+			}
+
+			/* Links */
+			#swagger-ui .swagger-ui a {
+				color: var(--color-primary) !important;
+			}
+
+			#swagger-ui .swagger-ui a:hover {
+				color: var(--color-secondary) !important;
+			}
+
+			/* Markdown */
+			#swagger-ui .swagger-ui .markdown p,
+			#swagger-ui .swagger-ui .markdown li,
+			#swagger-ui .swagger-ui .renderedMarkdown p {
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .markdown code {
+				background: var(--color-base-300) !important;
+				color: var(--color-error) !important;
+				padding: 2px 6px !important;
+				border-radius: 3px !important;
+			}
+
+			/* Curl command */
+			#swagger-ui .swagger-ui .curl-command {
+				background: var(--color-base-200) !important;
+				border-radius: 6px !important;
+			}
+
+			#swagger-ui .swagger-ui .curl-command .curl,
+			#swagger-ui .swagger-ui .curl-command span {
+				color: var(--color-base-content) !important;
+			}
+
+			/* Request body */
+			#swagger-ui .swagger-ui .body-param textarea,
+			#swagger-ui .swagger-ui .body-param__text {
+				background: var(--color-base-100) !important;
+				color: var(--color-base-content) !important;
+			}
+
+			/* Response wrapper */
+			#swagger-ui .swagger-ui .responses-wrapper,
+			#swagger-ui .swagger-ui .response {
+				background: transparent !important;
+			}
+
+			#swagger-ui .swagger-ui .response .response-col_description__inner p,
+			#swagger-ui .swagger-ui .response .response-col_description__inner div {
+				color: var(--color-base-content) !important;
+			}
+
+			/* Live response */
+			#swagger-ui .swagger-ui .live-responses-table thead td,
+			#swagger-ui .swagger-ui .live-responses-table tbody td {
+				color: var(--color-base-content) !important;
+			}
+
+			/* Loading */
+			#swagger-ui .swagger-ui .loading-container {
+				background: var(--color-base-100) !important;
+			}
+
+			/* Scrollbar */
+			#swagger-ui ::-webkit-scrollbar {
+				width: 8px;
+				height: 8px;
+			}
+
+			#swagger-ui ::-webkit-scrollbar-track {
+				background: var(--color-base-200);
+			}
+
+			#swagger-ui ::-webkit-scrollbar-thumb {
+				background: var(--color-neutral);
+				border-radius: 4px;
+			}
+
+			/* Copy button */
+			#swagger-ui .swagger-ui .copy-to-clipboard {
+				background: var(--color-base-300) !important;
+			}
+
+			#swagger-ui .swagger-ui .copy-to-clipboard button {
+				background: transparent !important;
+			}
+
+			/* Authorization */
+			#swagger-ui .swagger-ui .auth-wrapper,
+			#swagger-ui .swagger-ui .auth-container {
+				background: var(--color-base-100) !important;
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .auth-container h4,
+			#swagger-ui .swagger-ui .auth-container p,
+			#swagger-ui .swagger-ui .auth-container label {
+				color: var(--color-base-content) !important;
+			}
+
+			/* Dialog/Modal */
+			#swagger-ui .swagger-ui .dialog-ux .modal-ux {
+				background: var(--color-base-100) !important;
+				border: 1px solid var(--color-base-300) !important;
+			}
+
+			#swagger-ui .swagger-ui .dialog-ux .modal-ux-header {
+				background: var(--color-base-200) !important;
+				border-bottom: 1px solid var(--color-base-300) !important;
+			}
+
+			#swagger-ui .swagger-ui .dialog-ux .modal-ux-header h3 {
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .dialog-ux .modal-ux-content {
+				background: var(--color-base-100) !important;
+				color: var(--color-base-content) !important;
+			}
+
+			#swagger-ui .swagger-ui .dialog-ux .modal-ux-content p,
+			#swagger-ui .swagger-ui .dialog-ux .modal-ux-content label {
+				color: var(--color-base-content) !important;
+			}
+		</style>
+
+		<script>
+			window.onload = function() {
+				SwaggerUIBundle({
+					url: "/api/openapi.json",
+					dom_id: '#swagger-ui',
+					deepLinking: true,
+					presets: [
+						SwaggerUIBundle.presets.apis,
+						SwaggerUIBundle.SwaggerUIStandalonePreset
+					],
+					layout: "BaseLayout",
+					defaultModelsExpandDepth: 0,
+					docExpansion: "list",
+					tryItOutEnabled: true,
+					syntaxHighlight: {
+						activate: true,
+						theme: "monokai"
+					}
+				});
+			};
+		</script>
+	}
+}

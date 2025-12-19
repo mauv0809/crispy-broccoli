@@ -11,7 +11,15 @@ import (
 	"github.com/mauv0809/crispy-broccoli/internal/db"
 	"github.com/mauv0809/crispy-broccoli/internal/handlers"
 	"github.com/mauv0809/crispy-broccoli/internal/ingest"
+
+	"github.com/mauv0809/crispy-broccoli/docs"
 )
+
+// @title DeepValue API
+// @version 1.0
+// @description Personal value investing portfolio manager API
+// @host localhost:8080
+// @BasePath /
 
 func main() {
 	// Load .env file if it exists (local dev)
@@ -87,15 +95,21 @@ func main() {
 	// Routes
 	e.GET("/health", h.Health)
 	e.GET("/", h.Index)
+	e.GET("/docs", h.Docs)
+
+	// Serve OpenAPI spec directly
+	e.GET("/api/openapi.json", func(c echo.Context) error {
+		return c.JSONBlob(200, []byte(docs.SwaggerInfo.ReadDoc()))
+	})
 
 	// Admin routes for data ingestion
 	if ingestHandler != nil {
 		admin := e.Group("/admin")
 		admin.GET("/ingest/status", ingestHandler.IngestStatus)
-		admin.GET("/ingest/test", ingestHandler.IngestTest)
 		admin.POST("/ingest/tickers", ingestHandler.IngestTickers)
 		admin.POST("/ingest/fundamentals", ingestHandler.IngestFundamentals)
 		admin.POST("/ingest/daily", ingestHandler.IngestDaily)
+		admin.POST("/ingest/benchmarks", ingestHandler.IngestBenchmarks)
 		log.Println("Ingestion endpoints registered")
 	}
 

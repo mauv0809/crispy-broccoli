@@ -1,3 +1,6 @@
 @import "tailwindcss";
-@import "@catppuccin/tailwindcss/mocha.css";
+@plugin "daisyui";
 @source "../../internal/views/**/*.templ";
+
+/* Prevent flash of unstyled Alpine content */
+[x-cloak] { display: none !important; }

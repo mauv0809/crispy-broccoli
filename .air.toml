@@ -5,13 +5,13 @@ root = "."
 tmp_dir = "tmp"
 
 [build]
-# Run templ generate and CSS build before building
-cmd = "templ generate && npm run css:build && go build -o ./tmp/main ./cmd/app"
+# Run templ generate, CSS build, and swagger before building
+cmd = "templ generate && npm run css:build && swag init -g cmd/app/main.go --parseDependency --parseInternal -q && go build -o ./tmp/main ./cmd/app"
 bin = "./tmp/main"
 # Watch these extensions
 include_ext = ["go", "templ"]
 # Exclude these directories
-exclude_dir = ["assets", "tmp", "vendor", "node_modules", "pgdata"]
+exclude_dir = ["assets", "tmp", "vendor", "node_modules", "pgdata", "docs"]
 # Exclude generated files from triggering rebuild
 exclude_regex = ["_templ\\.go$", "output\\.css$"]
 # Delay before rebuild (ms)

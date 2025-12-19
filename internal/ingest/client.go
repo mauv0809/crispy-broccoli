@@ -192,9 +192,73 @@ func (c *Client) FetchTickers(ctx context.Context, tickers []string) ([]TickerRo
 	return ParseTickers(resp)
 }
 
-// FetchSF1 fetches fundamentals from SHARADAR/SF1.
-// If tickers is empty, fetches all. If since is zero, fetches all history.
-func (c *Client) FetchSF1(ctx context.Context, tickers []string, dimension string, since time.Time) ([]SF1Row, error) {
+// SF1Batch represents a batch of SF1 rows from the API.
+type SF1Batch struct {
+	Rows  []SF1Row
+	Error error
+}
+
+const apiBatchSize = 100 // Tickers per API request to avoid 414 errors
+
+// FetchSF1Stream fetches SF1 data with parallel API requests.
+// Uses up to maxParallel concurrent fetchers, streaming results to channel.
+func (c *Client) FetchSF1Stream(ctx context.Context, tickers []string, dimension string, since time.Time, maxParallel int) <-chan SF1Batch {
+	ch := make(chan SF1Batch, maxParallel)
+
+	go func() {
+		defer close(ch)
+
+		// If small batch, send directly
+		if len(tickers) <= apiBatchSize {
+			rows, err := c.fetchSF1Batch(ctx, tickers, dimension, since)
+			select {
+			case ch <- SF1Batch{Rows: rows, Error: err}:
+			case <-ctx.Done():
+			}
+			return
+		}
+
+		// Parallel fetch with semaphore
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, maxParallel)
+
+		for i := 0; i < len(tickers); i += apiBatchSize {
+			if ctx.Err() != nil {
+				break
+			}
+
+			end := i + apiBatchSize
+			if end > len(tickers) {
+				end = len(tickers)
+			}
+			batch := tickers[i:end]
+			batchNum := i/apiBatchSize + 1
+
+			sem <- struct{}{} // Acquire slot
+			wg.Add(1)
+
+			go func(batch []string, num int) {
+				defer wg.Done()
+				defer func() { <-sem }() // Release slot
+
+				log.Printf("Fetching SF1 batch %d (%d tickers, dimension: %s)", num, len(batch), dimension)
+				rows, err := c.fetchSF1Batch(ctx, batch, dimension, since)
+
+				select {
+				case ch <- SF1Batch{Rows: rows, Error: err}:
+				case <-ctx.Done():
+				}
+			}(batch, batchNum)
+		}
+
+		wg.Wait()
+	}()
+
+	return ch
+}
+
+// fetchSF1Batch fetches a single batch of SF1 data.
+func (c *Client) fetchSF1Batch(ctx context.Context, tickers []string, dimension string, since time.Time) ([]SF1Row, error) {
 	params := make(map[string]string)
 
 	if len(tickers) > 0 {
@@ -217,19 +281,29 @@ func (c *Client) FetchSF1(ctx context.Context, tickers []string, dimension strin
 	return ParseSF1(resp)
 }
 
-// FetchDaily fetches daily prices from SHARADAR/DAILY.
-// tickers is required (at least one ticker).
+// DailyBatch represents a batch of daily rows from the API.
+type DailyBatch struct {
+	Rows  []DailyRow
+	Error error
+}
+
+// FetchDaily fetches daily prices from SHARADAR/DAILY for a small set of tickers.
 func (c *Client) FetchDaily(ctx context.Context, tickers []string, since time.Time) ([]DailyRow, error) {
 	if len(tickers) == 0 {
 		return nil, fmt.Errorf("at least one ticker required for daily fetch")
 	}
 
+	return c.fetchDailyBatch(ctx, tickers, since)
+}
+
+// fetchDailyBatch fetches a single batch of daily data.
+func (c *Client) fetchDailyBatch(ctx context.Context, tickers []string, since time.Time) ([]DailyRow, error) {
 	params := map[string]string{
 		"ticker": strings.Join(tickers, ","),
 	}
 
 	if !since.IsZero() {
-		params["lastupdated.gte"] = since.Format("2006-01-02")
+		params["date.gte"] = since.Format("2006-01-02")
 	}
 
 	resp, err := c.FetchTable(ctx, "SHARADAR/DAILY", params)
@@ -238,6 +312,67 @@ func (c *Client) FetchDaily(ctx context.Context, tickers []string, since time.Ti
 	}
 
 	return ParseDaily(resp)
+}
+
+// FetchDailyStream fetches daily data with parallel API requests.
+// Uses up to maxParallel concurrent fetchers, streaming results to channel.
+func (c *Client) FetchDailyStream(ctx context.Context, tickers []string, since time.Time, maxParallel int) <-chan DailyBatch {
+	ch := make(chan DailyBatch, maxParallel)
+
+	go func() {
+		defer close(ch)
+
+		if len(tickers) == 0 {
+			return
+		}
+
+		// Small batch - fetch directly
+		if len(tickers) <= apiBatchSize {
+			rows, err := c.fetchDailyBatch(ctx, tickers, since)
+			select {
+			case ch <- DailyBatch{Rows: rows, Error: err}:
+			case <-ctx.Done():
+			}
+			return
+		}
+
+		// Parallel fetch with semaphore
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, maxParallel)
+
+		for i := 0; i < len(tickers); i += apiBatchSize {
+			if ctx.Err() != nil {
+				break
+			}
+
+			end := i + apiBatchSize
+			if end > len(tickers) {
+				end = len(tickers)
+			}
+			batch := tickers[i:end]
+			batchNum := i/apiBatchSize + 1
+
+			sem <- struct{}{} // Acquire slot
+			wg.Add(1)
+
+			go func(batch []string, num int) {
+				defer wg.Done()
+				defer func() { <-sem }() // Release slot
+
+				log.Printf("Fetching daily batch %d (%d tickers)", num, len(batch))
+				rows, err := c.fetchDailyBatch(ctx, batch, since)
+
+				select {
+				case ch <- DailyBatch{Rows: rows, Error: err}:
+				case <-ctx.Done():
+				}
+			}(batch, batchNum)
+		}
+
+		wg.Wait()
+	}()
+
+	return ch
 }
 
 // FetchSP500Current fetches current S&P 500 constituents.

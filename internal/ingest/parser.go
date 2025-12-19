@@ -2,6 +2,7 @@ package ingest
 
 import (
 	"fmt"
+	"log"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -180,7 +181,17 @@ func ParseDaily(resp *Response) ([]DailyRow, error) {
 	idx := buildColumnIndex(resp.Datatable.Columns)
 	rows := make([]DailyRow, 0, len(resp.Datatable.Data))
 
-	for _, row := range resp.Datatable.Data {
+	// Debug: log column names and first row
+	colNames := make([]string, 0, len(resp.Datatable.Columns))
+	for _, col := range resp.Datatable.Columns {
+		colNames = append(colNames, col.Name)
+	}
+	log.Printf("DAILY columns: %v", colNames)
+	if len(resp.Datatable.Data) > 0 {
+		log.Printf("DAILY first row sample: %v", resp.Datatable.Data[0])
+	}
+
+	for i, row := range resp.Datatable.Data {
 		date := getTime(row, idx, "date")
 		if date == nil {
 			continue
@@ -202,6 +213,13 @@ func ParseDaily(resp *Response) ([]DailyRow, error) {
 			PB:          getDecimal(row, idx, "pb"),
 			LastUpdated: getTime(row, idx, "lastupdated"),
 		}
+
+		// Debug: log first parsed row
+		if i == 0 {
+			log.Printf("DAILY first parsed row: Ticker=%s Date=%s Open=%v High=%v Low=%v Close=%v Volume=%v MarketCap=%v",
+				dr.Ticker, dr.Date.Format("2006-01-02"), dr.Open, dr.High, dr.Low, dr.Close, dr.Volume, dr.MarketCap)
+		}
+
 		if dr.Ticker != "" {
 			rows = append(rows, dr)
 		}
