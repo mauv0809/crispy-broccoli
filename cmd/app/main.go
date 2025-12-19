@@ -10,6 +10,7 @@ import (
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/mauv0809/crispy-broccoli/internal/db"
 	"github.com/mauv0809/crispy-broccoli/internal/handlers"
+	"github.com/mauv0809/crispy-broccoli/internal/ingest"
 )
 
 func main() {
@@ -64,12 +65,39 @@ func main() {
 	// Setup handlers
 	h := handlers.New()
 
+	// Setup repository and ingest client (if database is available)
+	var ingestHandler *handlers.IngestHandler
+	if pool != nil {
+		repo := db.NewRepository(pool)
+
+		// Setup ingest client (requires NASDAQ_API_KEY)
+		nasdaqAPIKey := os.Getenv("NASDAQ_API_KEY")
+		if nasdaqAPIKey != "" {
+			ingestClient := ingest.NewClient(nasdaqAPIKey)
+			ingestHandler = handlers.NewIngestHandler(ingestClient, repo)
+			log.Println("Ingest client initialized")
+		} else {
+			log.Println("Warning: NASDAQ_API_KEY not set, ingestion endpoints disabled")
+		}
+	}
+
 	// Static files
 	e.Static("/assets", "assets")
 
 	// Routes
 	e.GET("/health", h.Health)
 	e.GET("/", h.Index)
+
+	// Admin routes for data ingestion
+	if ingestHandler != nil {
+		admin := e.Group("/admin")
+		admin.GET("/ingest/status", ingestHandler.IngestStatus)
+		admin.GET("/ingest/test", ingestHandler.IngestTest)
+		admin.POST("/ingest/tickers", ingestHandler.IngestTickers)
+		admin.POST("/ingest/fundamentals", ingestHandler.IngestFundamentals)
+		admin.POST("/ingest/daily", ingestHandler.IngestDaily)
+		log.Println("Ingestion endpoints registered")
+	}
 
 	// Start server
 	port := os.Getenv("PORT")
