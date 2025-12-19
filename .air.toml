@@ -1,0 +1,30 @@
+# Air configuration for hot reload
+# Docs: https://github.com/air-verse/air
+
+root = "."
+tmp_dir = "tmp"
+
+[build]
+# Run templ generate and CSS build before building
+cmd = "templ generate && npm run css:build && go build -o ./tmp/main ./cmd/app"
+bin = "./tmp/main"
+# Watch these extensions
+include_ext = ["go", "templ"]
+# Exclude these directories
+exclude_dir = ["assets", "tmp", "vendor", "node_modules", "pgdata"]
+# Exclude generated files from triggering rebuild
+exclude_regex = ["_templ\\.go$", "output\\.css$"]
+# Delay before rebuild (ms)
+delay = 500
+
+[log]
+time = false
+
+[color]
+main = "magenta"
+watcher = "cyan"
+build = "yellow"
+runner = "green"
+
+[misc]
+clean_on_exit = true

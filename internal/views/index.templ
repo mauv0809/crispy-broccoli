@@ -1,0 +1,44 @@
+package views
+
+templ Index() {
+	@Layout("Dashboard") {
+		<div class="space-y-8">
+			<section class="bg-ctp-surface0 rounded-lg p-6">
+				<h2 class="text-2xl font-semibold text-ctp-lavender mb-4">Portfolio Summary</h2>
+				<p class="text-ctp-subtext1">No holdings yet. Run an analysis to get started.</p>
+				<div id="portfolio-table" class="mt-4">
+					<!-- Portfolio data will be loaded here -->
+				</div>
+			</section>
+
+			<section class="bg-ctp-surface0 rounded-lg p-6">
+				<h2 class="text-2xl font-semibold text-ctp-lavender mb-4">Run Analysis</h2>
+				<div class="flex gap-4 items-end">
+					<div>
+						<label class="block text-ctp-subtext1 text-sm mb-2">Strategy</label>
+						<select class="bg-ctp-surface1 text-ctp-text border border-ctp-surface2 rounded px-4 py-2 focus:outline-none focus:border-ctp-lavender">
+							<option>Magic Formula</option>
+							<option>Dividend Yield</option>
+						</select>
+					</div>
+					<button
+						class="bg-ctp-lavender text-ctp-base font-medium px-6 py-2 rounded hover:bg-ctp-mauve transition-colors"
+						hx-post="/analyze"
+						hx-target="#results-area"
+						hx-indicator="#loading"
+					>
+						Run Analysis
+					</button>
+					<span id="loading" class="htmx-indicator text-ctp-subtext1">Loading...</span>
+				</div>
+			</section>
+
+			<section class="bg-ctp-surface0 rounded-lg p-6">
+				<h2 class="text-2xl font-semibold text-ctp-lavender mb-4">Results</h2>
+				<div id="results-area" class="text-ctp-subtext1">
+					<p>Run an analysis to see recommendations.</p>
+				</div>
+			</section>
+		</div>
+	}
+}

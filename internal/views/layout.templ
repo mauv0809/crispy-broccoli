@@ -1,0 +1,58 @@
+package views
+
+templ Layout(title string) {
+	<!DOCTYPE html>
+	<html lang="en" class="mocha">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title } | DeepValue</title>
+			<link rel="icon" type="image/png" href="/assets/favicon.png"/>
+			<link rel="stylesheet" href="/assets/css/output.css"/>
+			<script src="https://unpkg.com/htmx.org@2.0.4"></script>
+			<script>
+				// Apply saved theme before render to avoid flash
+				(function() {
+					const theme = localStorage.getItem('theme') || 'mocha';
+					document.documentElement.className = theme;
+				})();
+			</script>
+		</head>
+		<body class="bg-ctp-base text-ctp-text min-h-screen transition-colors duration-200">
+			<nav class="bg-ctp-mantle border-b border-ctp-surface0 px-6 py-4">
+				<div class="max-w-7xl mx-auto flex items-center justify-between">
+					<a href="/" class="flex items-center gap-2">
+						<img src="/assets/mascot.png" alt="DeepValue" class="w-8 h-8 rounded-full"/>
+						<span class="text-xl font-bold text-ctp-lavender">DeepValue</span>
+					</a>
+					<div class="flex items-center gap-4">
+						<a href="/" class="text-ctp-subtext1 hover:text-ctp-text transition-colors">Dashboard</a>
+						<a href="/portfolio" class="text-ctp-subtext1 hover:text-ctp-text transition-colors">Portfolio</a>
+						<a href="/backtest" class="text-ctp-subtext1 hover:text-ctp-text transition-colors">Backtest</a>
+						<select
+							id="theme-select"
+							class="bg-ctp-surface0 text-ctp-text border border-ctp-surface1 rounded px-2 py-1 text-sm focus:outline-none focus:border-ctp-lavender"
+							onchange="setTheme(this.value)"
+						>
+							<option value="latte">Latte</option>
+							<option value="frappe">Frappe</option>
+							<option value="macchiato">Macchiato</option>
+							<option value="mocha">Mocha</option>
+						</select>
+					</div>
+				</div>
+			</nav>
+			<main class="max-w-7xl mx-auto px-6 py-8">
+				{ children... }
+			</main>
+			<script>
+				function setTheme(theme) {
+					document.documentElement.className = theme;
+					localStorage.setItem('theme', theme);
+				}
+				// Set dropdown to current theme on load
+				document.getElementById('theme-select').value = localStorage.getItem('theme') || 'mocha';
+			</script>
+		</body>
+	</html>
+}

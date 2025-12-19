@@ -1,0 +1,15 @@
+{
+  "name": "deepvalue",
+  "private": true,
+  "scripts": {
+    "css:build": "tailwindcss -i ./assets/css/input.css -o ./assets/css/output.css --minify",
+    "css:watch": "tailwindcss -i ./assets/css/input.css -o ./assets/css/output.css --watch"
+  },
+  "devDependencies": {
+    "@catppuccin/tailwindcss": "^1.0.0",
+    "tailwindcss": "^4.1.18"
+  },
+  "dependencies": {
+    "@tailwindcss/cli": "^4.1.18"
+  }
+}
