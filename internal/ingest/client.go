@@ -375,6 +375,137 @@ func (c *Client) FetchDailyStream(ctx context.Context, tickers []string, since t
 	return ch
 }
 
+// SEPBatch represents a batch of SEP rows from the API.
+type SEPBatch struct {
+	Rows  []DailyRow
+	Error error
+}
+
+// FetchSEP fetches daily prices from SHARADAR/SEP (Sharadar Equity Prices).
+// This table provides adjusted close prices (split + dividend adjusted) for accurate backtesting.
+// Date range is optional - if startDate or endDate is zero, they are not included in the query.
+func (c *Client) FetchSEP(ctx context.Context, tickers []string, startDate, endDate time.Time) ([]DailyRow, error) {
+	if len(tickers) == 0 {
+		return nil, fmt.Errorf("at least one ticker required for SEP fetch")
+	}
+
+	params := map[string]string{
+		"ticker": strings.Join(tickers, ","),
+	}
+
+	if !startDate.IsZero() {
+		params["date.gte"] = startDate.Format("2006-01-02")
+	}
+	if !endDate.IsZero() {
+		params["date.lte"] = endDate.Format("2006-01-02")
+	}
+
+	log.Printf("Fetching SEP prices for %d tickers from %s to %s",
+		len(tickers),
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"))
+
+	resp, err := c.FetchTable(ctx, "SHARADAR/SEP", params)
+	if err != nil {
+		return nil, fmt.Errorf("fetching SEP: %w", err)
+	}
+
+	return ParseSEP(resp)
+}
+
+// FetchSEPStream fetches SEP data with parallel API requests for many tickers.
+func (c *Client) FetchSEPStream(ctx context.Context, tickers []string, startDate, endDate time.Time, maxParallel int) <-chan SEPBatch {
+	ch := make(chan SEPBatch, maxParallel)
+
+	go func() {
+		defer close(ch)
+
+		if len(tickers) == 0 {
+			return
+		}
+
+		// Small batch - fetch directly
+		if len(tickers) <= apiBatchSize {
+			rows, err := c.FetchSEP(ctx, tickers, startDate, endDate)
+			select {
+			case ch <- SEPBatch{Rows: rows, Error: err}:
+			case <-ctx.Done():
+			}
+			return
+		}
+
+		// Parallel fetch with semaphore
+		var wg sync.WaitGroup
+		sem := make(chan struct{}, maxParallel)
+
+		for i := 0; i < len(tickers); i += apiBatchSize {
+			if ctx.Err() != nil {
+				break
+			}
+
+			end := i + apiBatchSize
+			if end > len(tickers) {
+				end = len(tickers)
+			}
+			batch := tickers[i:end]
+			batchNum := i/apiBatchSize + 1
+
+			sem <- struct{}{} // Acquire slot
+			wg.Add(1)
+
+			go func(batch []string, num int) {
+				defer wg.Done()
+				defer func() { <-sem }() // Release slot
+
+				log.Printf("Fetching SEP batch %d (%d tickers)", num, len(batch))
+				rows, err := c.FetchSEP(ctx, batch, startDate, endDate)
+
+				select {
+				case ch <- SEPBatch{Rows: rows, Error: err}:
+				case <-ctx.Done():
+				}
+			}(batch, batchNum)
+		}
+
+		wg.Wait()
+	}()
+
+	return ch
+}
+
+// FetchSFP fetches daily prices from SHARADAR/SFP (Sharadar Fund Prices).
+// This table covers ETFs, CEFs, ETNs, and ETD securities (not individual equities).
+// Use this for benchmarks like SPY, QQQ, IWM, etc.
+func (c *Client) FetchSFP(ctx context.Context, tickers []string, startDate, endDate time.Time) ([]DailyRow, error) {
+	if len(tickers) == 0 {
+		return nil, fmt.Errorf("at least one ticker required for SFP fetch")
+	}
+
+	params := map[string]string{
+		"ticker": strings.Join(tickers, ","),
+	}
+
+	if !startDate.IsZero() {
+		params["date.gte"] = startDate.Format("2006-01-02")
+	}
+	if !endDate.IsZero() {
+		params["date.lte"] = endDate.Format("2006-01-02")
+	}
+
+	log.Printf("Fetching SFP (fund) prices for %d tickers from %s to %s",
+		len(tickers),
+		startDate.Format("2006-01-02"),
+		endDate.Format("2006-01-02"))
+
+	resp, err := c.FetchTable(ctx, "SHARADAR/SFP", params)
+	if err != nil {
+		return nil, fmt.Errorf("fetching SFP: %w", err)
+	}
+
+	// SFP has same structure as SEP, so we can reuse the parser
+	return ParseSEP(resp)
+}
+
 // FetchSP500Current fetches current S&P 500 constituents.
 func (c *Client) FetchSP500Current(ctx context.Context) ([]string, error) {
 	params := map[string]string{
@@ -399,4 +530,22 @@ func (c *Client) FetchSP500Current(ctx context.Context) ([]string, error) {
 	}
 
 	return tickers, nil
+}
+
+// FetchSP500History fetches full S&P 500 membership history (all add/drop events).
+// This is used for point-in-time backtesting to know which stocks were in the index at any date.
+func (c *Client) FetchSP500History(ctx context.Context) ([]SP500Row, error) {
+	// Fetch all membership changes (no action filter = get all)
+	resp, err := c.FetchTable(ctx, "SHARADAR/SP500", nil)
+	if err != nil {
+		return nil, fmt.Errorf("fetching SP500 history: %w", err)
+	}
+
+	rows, err := ParseSP500(resp)
+	if err != nil {
+		return nil, err
+	}
+
+	log.Printf("Fetched %d S&P 500 membership records", len(rows))
+	return rows, nil
 }

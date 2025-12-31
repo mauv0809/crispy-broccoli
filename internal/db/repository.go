@@ -101,19 +101,49 @@ func (r *Repository) upsertFinancialMetricsBatch(ctx context.Context, rows []ing
 			reportPeriod = *row.ReportPeriod
 		}
 
+		// Calculate ROE = net_income / equity (proper ROE formula)
+		var roe interface{}
+		if row.NetIncome != nil && row.Equity != nil && !row.Equity.IsZero() {
+			roeVal := row.NetIncome.Div(*row.Equity)
+			roe = sanitizeDecimal(&roeVal, "roe", row.Ticker, 4)
+		}
+
+		// Calculate ROA = net_income / assets (called "roe" in Python strategy)
+		var roa interface{}
+		if row.NetIncome != nil && row.Assets != nil && !row.Assets.IsZero() {
+			roaVal := row.NetIncome.Div(*row.Assets)
+			roa = sanitizeDecimal(&roaVal, "roa", row.Ticker, 4)
+		}
+
+		// Calculate GP/A = gross_profit / assets (quality metric from Python strategy)
+		var gpA interface{}
+		if row.GrossProfit != nil && row.Assets != nil && !row.Assets.IsZero() {
+			gpAVal := row.GrossProfit.Div(*row.Assets)
+			gpA = sanitizeDecimal(&gpAVal, "gp_a", row.Ticker, 4)
+		}
+
+		// Calculate Accruals = fcf / net_income (earnings quality from Python strategy)
+		var accruals interface{}
+		if row.FCF != nil && row.NetIncome != nil && !row.NetIncome.IsZero() {
+			accrualsVal := row.FCF.Div(*row.NetIncome)
+			accruals = sanitizeDecimal(&accrualsVal, "accruals", row.Ticker, 4)
+		}
+
 		batch.Queue(`
 			INSERT INTO financial_metrics (
 				ticker, dimension, date_key, report_period,
 				revenue, net_income, ebitda, fcf,
 				roic, pe_ratio, ev_ebit, pb_ratio, debt_to_equity,
 				market_cap, enterprise_value, price,
+				assets, gross_profit, roe, roa, gp_a, accruals,
 				last_updated, updated_at
 			) VALUES (
 				$1, $2, $3, $4,
 				$5, $6, $7, $8,
 				$9, $10, $11, $12, $13,
 				$14, $15, $16,
-				$17, NOW()
+				$17, $18, $19, $20, $21, $22,
+				$23, NOW()
 			)
 			ON CONFLICT (ticker, date_key, dimension) DO UPDATE SET
 				report_period = EXCLUDED.report_period,
@@ -129,6 +159,12 @@ func (r *Repository) upsertFinancialMetricsBatch(ctx context.Context, rows []ing
 				market_cap = EXCLUDED.market_cap,
 				enterprise_value = EXCLUDED.enterprise_value,
 				price = EXCLUDED.price,
+				assets = EXCLUDED.assets,
+				gross_profit = EXCLUDED.gross_profit,
+				roe = EXCLUDED.roe,
+				roa = EXCLUDED.roa,
+				gp_a = EXCLUDED.gp_a,
+				accruals = EXCLUDED.accruals,
 				last_updated = EXCLUDED.last_updated,
 				updated_at = NOW()
 		`,
@@ -145,6 +181,12 @@ func (r *Repository) upsertFinancialMetricsBatch(ctx context.Context, rows []ing
 			sanitizeDecimal(row.MarketCap, "market_cap", row.Ticker, 2),
 			sanitizeDecimal(row.EV, "enterprise_value", row.Ticker, 2),
 			sanitizeDecimal(row.Price, "price", row.Ticker, 6),
+			sanitizeDecimal(row.Assets, "assets", row.Ticker, 2),
+			sanitizeDecimal(row.GrossProfit, "gross_profit", row.Ticker, 2),
+			roe,
+			roa,
+			gpA,
+			accruals,
 			row.LastUpdated,
 		)
 	}
@@ -449,4 +491,324 @@ func (r *Repository) GetBenchmarkPriceCount(ctx context.Context) (int, error) {
 	var count int
 	err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM benchmark_prices").Scan(&count)
 	return count, err
+}
+
+// PricePoint represents a single price data point for backtesting.
+type PricePoint struct {
+	Date  time.Time
+	Close float64
+}
+
+// GetPricesForPeriod fetches daily closing prices for multiple tickers within a date range.
+// Returns a map of ticker -> []PricePoint sorted by date.
+func (r *Repository) GetPricesForPeriod(ctx context.Context, tickers []string, start, end time.Time) (map[string][]PricePoint, error) {
+	if len(tickers) == 0 {
+		return map[string][]PricePoint{}, nil
+	}
+
+	rows, err := r.pool.Query(ctx, `
+		SELECT ticker, date, close
+		FROM daily_prices
+		WHERE ticker = ANY($1)
+		  AND date >= $2
+		  AND date <= $3
+		  AND close IS NOT NULL
+		ORDER BY ticker, date
+	`, tickers, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("querying prices for period: %w", err)
+	}
+	defer rows.Close()
+
+	result := make(map[string][]PricePoint)
+	for rows.Next() {
+		var ticker string
+		var date time.Time
+		var close float64
+
+		if err := rows.Scan(&ticker, &date, &close); err != nil {
+			return nil, fmt.Errorf("scanning price row: %w", err)
+		}
+
+		result[ticker] = append(result[ticker], PricePoint{Date: date, Close: close})
+	}
+
+	return result, rows.Err()
+}
+
+// GetBenchmarkPricesForPeriod fetches benchmark (e.g., SPY) closing prices for a date range.
+func (r *Repository) GetBenchmarkPricesForPeriod(ctx context.Context, ticker string, start, end time.Time) ([]PricePoint, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT date, close
+		FROM benchmark_prices
+		WHERE ticker = $1
+		  AND date >= $2
+		  AND date <= $3
+		  AND close IS NOT NULL
+		ORDER BY date
+	`, ticker, start, end)
+	if err != nil {
+		return nil, fmt.Errorf("querying benchmark prices: %w", err)
+	}
+	defer rows.Close()
+
+	var result []PricePoint
+	for rows.Next() {
+		var date time.Time
+		var close float64
+
+		if err := rows.Scan(&date, &close); err != nil {
+			return nil, fmt.Errorf("scanning benchmark price row: %w", err)
+		}
+
+		result = append(result, PricePoint{Date: date, Close: close})
+	}
+
+	return result, rows.Err()
+}
+
+// GetPriceOnOrBefore gets the closest price on or before the given date for a ticker.
+// Useful for getting entry/exit prices at rebalance dates.
+func (r *Repository) GetPriceOnOrBefore(ctx context.Context, ticker string, date time.Time) (*PricePoint, error) {
+	var result PricePoint
+	err := r.pool.QueryRow(ctx, `
+		SELECT date, close
+		FROM daily_prices
+		WHERE ticker = $1
+		  AND date <= $2
+		  AND close IS NOT NULL
+		ORDER BY date DESC
+		LIMIT 1
+	`, ticker, date).Scan(&result.Date, &result.Close)
+
+	if err != nil {
+		return nil, err // Could be pgx.ErrNoRows
+	}
+	return &result, nil
+}
+
+// GetBenchmarkPriceOnOrBefore gets the closest benchmark price on or before the given date.
+func (r *Repository) GetBenchmarkPriceOnOrBefore(ctx context.Context, ticker string, date time.Time) (*PricePoint, error) {
+	var result PricePoint
+	err := r.pool.QueryRow(ctx, `
+		SELECT date, close
+		FROM benchmark_prices
+		WHERE ticker = $1
+		  AND date <= $2
+		  AND close IS NOT NULL
+		ORDER BY date DESC
+		LIMIT 1
+	`, ticker, date).Scan(&result.Date, &result.Close)
+
+	if err != nil {
+		return nil, err
+	}
+	return &result, nil
+}
+
+// GetDailyPriceCountForTicker returns the number of daily prices for a specific ticker.
+func (r *Repository) GetDailyPriceCountForTicker(ctx context.Context, ticker string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM daily_prices WHERE ticker = $1", ticker).Scan(&count)
+	return count, err
+}
+
+// GetBenchmarkPriceCountForTicker returns the number of benchmark prices for a specific ticker.
+func (r *Repository) GetBenchmarkPriceCountForTicker(ctx context.Context, ticker string) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM benchmark_prices WHERE ticker = $1", ticker).Scan(&count)
+	return count, err
+}
+
+// UpsertSP500Membership inserts or updates S&P 500 membership records.
+func (r *Repository) UpsertSP500Membership(ctx context.Context, rows []ingest.SP500Row) (int, error) {
+	if len(rows) == 0 {
+		return 0, nil
+	}
+
+	batch := &pgx.Batch{}
+	for _, row := range rows {
+		batch.Queue(`
+			INSERT INTO sp500_membership (ticker, date, action)
+			VALUES ($1, $2, $3)
+			ON CONFLICT (ticker, date, action) DO NOTHING
+		`, row.Ticker, row.Date, row.Action)
+	}
+
+	br := r.pool.SendBatch(ctx, batch)
+	defer br.Close()
+
+	count := 0
+	for range rows {
+		_, err := br.Exec()
+		if err != nil {
+			log.Printf("Error upserting SP500 membership: %v", err)
+			continue
+		}
+		count++
+	}
+
+	return count, nil
+}
+
+// GetSP500MembersAtDate returns all tickers that were members of the S&P 500 on a given date.
+// Uses point-in-time logic: a ticker is a member if it was added before the date and
+// either never removed or removed after the date.
+// Note: API action values are 'added' and 'removed' (not 'add'/'drop')
+func (r *Repository) GetSP500MembersAtDate(ctx context.Context, date time.Time) ([]string, error) {
+	rows, err := r.pool.Query(ctx, `
+		WITH membership AS (
+			SELECT
+				ticker,
+				MIN(CASE WHEN action = 'added' THEN date END) as add_date,
+				MAX(CASE WHEN action = 'removed' THEN date END) as remove_date
+			FROM sp500_membership
+			GROUP BY ticker
+		)
+		SELECT ticker
+		FROM membership
+		WHERE add_date IS NOT NULL
+		  AND add_date <= $1
+		  AND (remove_date IS NULL OR remove_date > $1)
+		ORDER BY ticker
+	`, date)
+	if err != nil {
+		return nil, fmt.Errorf("querying SP500 members: %w", err)
+	}
+	defer rows.Close()
+
+	var tickers []string
+	for rows.Next() {
+		var ticker string
+		if err := rows.Scan(&ticker); err != nil {
+			return nil, err
+		}
+		tickers = append(tickers, ticker)
+	}
+
+	return tickers, rows.Err()
+}
+
+// GetSP500MembershipCount returns the number of membership records in the database.
+func (r *Repository) GetSP500MembershipCount(ctx context.Context) (int, error) {
+	var count int
+	err := r.pool.QueryRow(ctx, "SELECT COUNT(*) FROM sp500_membership").Scan(&count)
+	return count, err
+}
+
+// GetTickersWithoutPrices returns tickers that have no daily price data.
+func (r *Repository) GetTickersWithoutPrices(ctx context.Context, limit int) ([]string, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT c.ticker
+		FROM companies c
+		WHERE c.active = true
+		  AND NOT EXISTS (
+			SELECT 1 FROM daily_prices dp WHERE dp.ticker = c.ticker
+		  )
+		ORDER BY c.ticker
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var tickers []string
+	for rows.Next() {
+		var ticker string
+		if err := rows.Scan(&ticker); err != nil {
+			return nil, err
+		}
+		tickers = append(tickers, ticker)
+	}
+
+	return tickers, rows.Err()
+}
+
+// TickerPriceStatus represents a ticker and its last price date.
+type TickerPriceStatus struct {
+	Ticker   string
+	LastDate time.Time
+}
+
+// GetTickersNeedingPriceUpdate returns tickers that need price updates.
+// Priority: 1) No prices at all (and not recently attempted), 2) Stale prices (older than staleDays)
+// retryDays controls how long to wait before retrying tickers that had no data from Tiingo
+func (r *Repository) GetTickersNeedingPriceUpdate(ctx context.Context, limit int, staleDays int, retryDays int) ([]TickerPriceStatus, error) {
+	rows, err := r.pool.Query(ctx, `
+		WITH ticker_status AS (
+			SELECT
+				c.ticker,
+				c.price_fetch_attempted_at,
+				MAX(dp.date) as last_date
+			FROM companies c
+			LEFT JOIN daily_prices dp ON c.ticker = dp.ticker
+			WHERE c.active = true
+			GROUP BY c.ticker, c.price_fetch_attempted_at
+		)
+		SELECT ticker, COALESCE(last_date, '1900-01-01'::date) as last_date
+		FROM ticker_status
+		WHERE (
+			-- Has prices but they're stale
+			last_date IS NOT NULL AND last_date < (CURRENT_DATE - ($1::integer))
+		) OR (
+			-- No prices and either never attempted or attempted long ago
+			last_date IS NULL AND (
+				price_fetch_attempted_at IS NULL
+				OR price_fetch_attempted_at < (NOW() - ($3::integer * INTERVAL '1 day'))
+			)
+		)
+		ORDER BY last_date ASC NULLS FIRST, ticker
+		LIMIT $2
+	`, staleDays, limit, retryDays)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var results []TickerPriceStatus
+	for rows.Next() {
+		var ts TickerPriceStatus
+		if err := rows.Scan(&ts.Ticker, &ts.LastDate); err != nil {
+			return nil, err
+		}
+		results = append(results, ts)
+	}
+
+	return results, rows.Err()
+}
+
+// GetLastPriceDateForTicker returns the most recent price date for a ticker.
+func (r *Repository) GetLastPriceDateForTicker(ctx context.Context, ticker string) (time.Time, error) {
+	var lastDate time.Time
+	err := r.pool.QueryRow(ctx, `
+		SELECT COALESCE(MAX(date), '1900-01-01'::date)
+		FROM daily_prices WHERE ticker = $1
+	`, ticker).Scan(&lastDate)
+	return lastDate, err
+}
+
+// GetLastBenchmarkPriceDateForTicker returns the most recent benchmark price date for a ticker.
+func (r *Repository) GetLastBenchmarkPriceDateForTicker(ctx context.Context, ticker string) (time.Time, error) {
+	var lastDate time.Time
+	err := r.pool.QueryRow(ctx, `
+		SELECT COALESCE(MAX(date), '1900-01-01'::date)
+		FROM benchmark_prices WHERE ticker = $1
+	`, ticker).Scan(&lastDate)
+	return lastDate, err
+}
+
+// MarkPriceFetchAttempted marks tickers as having had a price fetch attempt.
+// This prevents repeatedly fetching prices for tickers that Tiingo doesn't have data for.
+func (r *Repository) MarkPriceFetchAttempted(ctx context.Context, tickers []string) error {
+	if len(tickers) == 0 {
+		return nil
+	}
+
+	_, err := r.pool.Exec(ctx, `
+		UPDATE companies
+		SET price_fetch_attempted_at = NOW()
+		WHERE ticker = ANY($1)
+	`, tickers)
+	return err
 }

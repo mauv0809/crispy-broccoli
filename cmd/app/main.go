@@ -11,6 +11,7 @@ import (
 	"github.com/mauv0809/crispy-broccoli/internal/db"
 	"github.com/mauv0809/crispy-broccoli/internal/handlers"
 	"github.com/mauv0809/crispy-broccoli/internal/ingest"
+	"github.com/mauv0809/crispy-broccoli/internal/strategy"
 
 	"github.com/mauv0809/crispy-broccoli/docs"
 )
@@ -75,17 +76,45 @@ func main() {
 
 	// Setup repository and ingest client (if database is available)
 	var ingestHandler *handlers.IngestHandler
+	var strategyHandler *handlers.StrategyHandler
 	if pool != nil {
 		repo := db.NewRepository(pool)
 
-		// Setup ingest client (requires NASDAQ_API_KEY)
+		// Setup Nasdaq Data Link client (for SEP equity prices and fundamentals)
+		var nasdaqClient *ingest.Client
 		nasdaqAPIKey := os.Getenv("NASDAQ_API_KEY")
 		if nasdaqAPIKey != "" {
-			ingestClient := ingest.NewClient(nasdaqAPIKey)
-			ingestHandler = handlers.NewIngestHandler(ingestClient, repo)
-			log.Println("Ingest client initialized")
+			nasdaqClient = ingest.NewClient(nasdaqAPIKey)
+			log.Println("Nasdaq Data Link client initialized (SEP for equity prices)")
 		} else {
-			log.Println("Warning: NASDAQ_API_KEY not set, ingestion endpoints disabled")
+			log.Println("Warning: NASDAQ_API_KEY not set, Nasdaq data endpoints disabled")
+		}
+
+		// Setup Tiingo client (for ETF benchmark prices - SPY, QQQ, etc.)
+		var tiingoClient *ingest.TiingoClient
+		tiingoAPIKey := os.Getenv("TIINGO_API_KEY")
+		if tiingoAPIKey != "" {
+			tiingoClient = ingest.NewTiingoClient(tiingoAPIKey)
+			log.Println("Tiingo client initialized (for ETF benchmarks and stock prices)")
+		} else {
+			log.Println("Warning: TIINGO_API_KEY not set, ETF benchmark comparison disabled")
+		}
+
+		// Setup ingest handler (needs both clients)
+		if nasdaqClient != nil {
+			ingestHandler = handlers.NewIngestHandler(nasdaqClient, tiingoClient, repo)
+		}
+
+		// Setup strategy handler with backtester
+		strategyRepo := strategy.NewRepository(pool)
+		strategyExecutor := strategy.NewExecutor(pool)
+		backtester := strategy.NewBacktester(strategyExecutor, repo, nasdaqClient, tiingoClient)
+		strategyHandler = handlers.NewStrategyHandler(strategyRepo, strategyExecutor, backtester)
+		log.Println("Strategy engine initialized")
+
+		// Seed default strategies
+		if err := strategy.SeedDefaultStrategies(ctx, pool); err != nil {
+			log.Printf("Warning: failed to seed default strategies: %v", err)
 		}
 	}
 
@@ -102,14 +131,44 @@ func main() {
 		return c.JSONBlob(200, []byte(docs.SwaggerInfo.ReadDoc()))
 	})
 
-	// Admin routes for data ingestion
+	// Strategy API routes
+	if strategyHandler != nil {
+		// JSON API endpoints
+		api := e.Group("/api")
+		api.GET("/strategies", strategyHandler.ListStrategies)
+		api.POST("/strategies", strategyHandler.CreateStrategy)
+		api.POST("/strategies/preview", strategyHandler.PreviewStrategy)
+		api.GET("/strategies/:id", strategyHandler.GetStrategy)
+		api.PUT("/strategies/:id", strategyHandler.UpdateStrategy)
+		api.DELETE("/strategies/:id", strategyHandler.DeleteStrategy)
+		api.POST("/strategies/:id/run", strategyHandler.RunStrategyHTMX) // Returns HTML for HTMX
+		api.GET("/strategies/:id/runs", strategyHandler.GetStrategyRunsHTMX) // Returns HTML for HTMX
+		api.GET("/strategies/:id/stats", strategyHandler.GetStrategyStats)
+		api.POST("/strategies/:id/backtest", strategyHandler.RunBacktest)          // JSON API for backtest
+		api.POST("/strategies/:id/backtest-htmx", strategyHandler.RunBacktestHTMX) // HTML for HTMX
+		api.GET("/strategy-fields", strategyHandler.GetStrategyFields)
+
+		// HTML Page routes
+		e.GET("/strategies", strategyHandler.StrategiesPage)
+		e.GET("/strategies/new", strategyHandler.NewStrategyPage)
+		e.GET("/strategies/:id", strategyHandler.StrategyDetailPage)
+		e.GET("/strategies/:id/edit", strategyHandler.EditStrategyPage)
+
+		// Dashboard API (returns HTML fragments for HTMX)
+		api.GET("/dashboard/strategies", strategyHandler.DashboardStrategies)
+		api.GET("/dashboard/runs", strategyHandler.DashboardRuns)
+		log.Println("Strategy endpoints registered")
+	}
+
+	// Admin routes for data ingestion (Sharadar - fundamentals only)
 	if ingestHandler != nil {
 		admin := e.Group("/admin")
 		admin.GET("/ingest/status", ingestHandler.IngestStatus)
 		admin.POST("/ingest/tickers", ingestHandler.IngestTickers)
 		admin.POST("/ingest/fundamentals", ingestHandler.IngestFundamentals)
-		admin.POST("/ingest/daily", ingestHandler.IngestDaily)
-		admin.POST("/ingest/benchmarks", ingestHandler.IngestBenchmarks)
+		admin.POST("/ingest/sp500", ingestHandler.IngestSP500)
+		admin.POST("/ingest/benchmark", ingestHandler.IngestBenchmark)
+		admin.POST("/ingest/prices", ingestHandler.IngestPrices)
 		log.Println("Ingestion endpoints registered")
 	}
 

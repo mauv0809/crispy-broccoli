@@ -1,5 +1,303 @@
 basePath: /
 definitions:
+  github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestConfig:
+    properties:
+      end_date:
+        type: string
+      initial_capital:
+        type: number
+      lag_days:
+        description: Days before rebalance to use for fundamentals (default 60)
+        type: integer
+      rebalance_freq:
+        description: '"monthly", "quarterly", "semi-annual", "annual"'
+        type: string
+      start_date:
+        type: string
+      strategy_id:
+        type: integer
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestPeriod:
+    properties:
+      cumulative_val:
+        description: Portfolio value at end of period
+        type: number
+      end_date:
+        type: string
+      holdings:
+        items:
+          $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Holding'
+        type: array
+      period_return:
+        description: Return for this period
+        type: number
+      start_date:
+        type: string
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestResult:
+    properties:
+      alpha:
+        description: Excess return vs benchmark
+        type: number
+      annualized_return:
+        description: CAGR
+        type: number
+      benchmark_annualized:
+        description: SPY CAGR
+        type: number
+      benchmark_curve:
+        description: For charting
+        items:
+          $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.CurvePoint'
+        type: array
+      benchmark_return:
+        description: SPY total return
+        type: number
+      config:
+        $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestConfig'
+      execution_time_ms:
+        type: integer
+      max_drawdown:
+        description: Maximum peak-to-trough decline
+        type: number
+      periods:
+        items:
+          $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestPeriod'
+        type: array
+      portfolio_curve:
+        description: For charting
+        items:
+          $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.CurvePoint'
+        type: array
+      sharpe_ratio:
+        description: Risk-adjusted return (if we add volatility calc)
+        type: number
+      total_return:
+        description: Total percentage return
+        type: number
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.CreateStrategyRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      rules:
+        $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Rules'
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.CurvePoint:
+    properties:
+      date:
+        type: string
+      value:
+        description: Normalized value (starts at 1.0)
+        type: number
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.FieldMeta:
+    properties:
+      column:
+        description: actual DB column name if different
+        type: string
+      description:
+        type: string
+      label:
+        type: string
+      name:
+        type: string
+      operators:
+        description: Valid operators for this field
+        items:
+          type: string
+        type: array
+      rankable:
+        description: Can this field be used in ranking?
+        type: boolean
+      table:
+        description: financial_metrics or daily_prices
+        type: string
+      type:
+        description: number, text, boolean
+        type: string
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.Filter:
+    properties:
+      field:
+        type: string
+      operator:
+        type: string
+      value: {}
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.Holding:
+    properties:
+      entry_price:
+        description: Price at period start
+        type: number
+      exit_price:
+        description: Price at period end
+        type: number
+      is_fallback:
+        description: True if added via fallback (didn't pass filters)
+        type: boolean
+      rank:
+        type: integer
+      return:
+        description: Individual stock return
+        type: number
+      ticker:
+        type: string
+      weight:
+        description: Portfolio weight (0-1)
+        type: number
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.Ranking:
+    properties:
+      direction:
+        description: asc or desc
+        type: string
+      field:
+        type: string
+      weight:
+        description: percentage, must sum to 100
+        type: integer
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.Recommendation:
+    properties:
+      company_name:
+        type: string
+      is_fallback:
+        description: True if this stock didn't pass all filters but was added to fill
+          quota
+        type: boolean
+      metrics:
+        additionalProperties: {}
+        description: All requested fields
+        type: object
+      rank:
+        type: integer
+      score:
+        type: number
+      sector:
+        type: string
+      ticker:
+        type: string
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.Rules:
+    properties:
+      dimension:
+        description: MRQ, MRY, ARQ, ARY
+        type: string
+      filters:
+        items:
+          $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Filter'
+        type: array
+      limit:
+        type: integer
+      ranking:
+        items:
+          $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Ranking'
+        type: array
+      universe:
+        description: 'Optional: "sp500" to restrict to S&P 500 members, empty for
+          all stocks'
+        type: string
+      weights:
+        description: Optional custom portfolio weights (must sum to 1.0)
+        items:
+          type: number
+        type: array
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.RunResult:
+    properties:
+      execution_time_ms:
+        type: integer
+      recommendations:
+        items:
+          $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Recommendation'
+        type: array
+      run_at:
+        type: string
+      stocks_matched:
+        type: integer
+      stocks_screened:
+        type: integer
+      strategy_id:
+        type: integer
+      strategy_name:
+        type: string
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.RunStats:
+    properties:
+      avg_execution_time_ms:
+        type: number
+      avg_stocks_matched:
+        type: number
+      last_run_at:
+        type: string
+      total_runs:
+        type: integer
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy:
+    properties:
+      created_at:
+        type: string
+      description:
+        type: string
+      id:
+        type: integer
+      is_default:
+        type: boolean
+      name:
+        type: string
+      rules:
+        $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Rules'
+      updated_at:
+        type: string
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.StrategyRun:
+    properties:
+      execution_time_ms:
+        type: integer
+      id:
+        type: integer
+      results:
+        items:
+          $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Recommendation'
+        type: array
+      run_at:
+        type: string
+      stocks_matched:
+        type: integer
+      stocks_screened:
+        type: integer
+      strategy_id:
+        type: integer
+    type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.UpdateStrategyRequest:
+    properties:
+      description:
+        type: string
+      name:
+        type: string
+      rules:
+        $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Rules'
+    type: object
+  internal_handlers.BacktestRequest:
+    properties:
+      end_date:
+        description: 'Format: YYYY-MM-DD'
+        type: string
+      initial_capital:
+        type: number
+      lag_days:
+        description: Default 60
+        type: integer
+      rebalance_freq:
+        description: monthly, quarterly, semi-annual, annual
+        type: string
+      start_date:
+        description: 'Format: YYYY-MM-DD'
+        type: string
+    type: object
   internal_handlers.IngestResponse:
     properties:
       count:
@@ -18,25 +316,22 @@ info:
   title: DeepValue API
   version: "1.0"
 paths:
-  /admin/ingest/benchmarks:
+  /admin/ingest/benchmark:
     post:
       consumes:
       - application/json
-      description: Fetches daily data for configured benchmarks (e.g., SPY) from SHARADAR/DAILY
+      description: Fetches ETF benchmark prices (SPY, QQQ, etc.) from Tiingo - incremental
+        updates
       parameters:
-      - description: 'Fetch all history (default: incremental)'
+      - description: Comma-separated tickers (defaults to SPY)
         in: query
-        name: full
-        type: boolean
+        name: ticker
+        type: string
       produces:
       - application/json
       responses:
         "200":
           description: OK
-          schema:
-            $ref: '#/definitions/internal_handlers.IngestResponse'
-        "400":
-          description: Bad Request
           schema:
             $ref: '#/definitions/internal_handlers.IngestResponse'
         "500":
@@ -44,39 +339,6 @@ paths:
           schema:
             $ref: '#/definitions/internal_handlers.IngestResponse'
       summary: Ingest benchmark prices
-      tags:
-      - ingestion
-  /admin/ingest/daily:
-    post:
-      consumes:
-      - application/json
-      description: Fetches daily price/fundamental data from SHARADAR/DAILY. If no
-        ticker specified, fetches for all DB companies.
-      parameters:
-      - description: Comma-separated tickers (defaults to all companies in DB)
-        in: query
-        name: ticker
-        type: string
-      - description: 'Fetch all history (default: incremental)'
-        in: query
-        name: full
-        type: boolean
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/internal_handlers.IngestResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/internal_handlers.IngestResponse'
-        "500":
-          description: Internal Server Error
-          schema:
-            $ref: '#/definitions/internal_handlers.IngestResponse'
-      summary: Ingest daily prices
       tags:
       - ingestion
   /admin/ingest/fundamentals:
@@ -115,6 +377,64 @@ paths:
           schema:
             $ref: '#/definitions/internal_handlers.IngestResponse'
       summary: Ingest financial metrics
+      tags:
+      - ingestion
+  /admin/ingest/prices:
+    post:
+      consumes:
+      - application/json
+      description: 'Fetches daily prices for stocks from Tiingo (rate limited: 50/hour)
+        - incremental updates'
+      parameters:
+      - description: Comma-separated tickers (defaults to batch of stocks needing
+          prices)
+        in: query
+        name: ticker
+        type: string
+      - description: Max tickers to fetch (default 10)
+        in: query
+        name: limit
+        type: integer
+      - description: Consider data stale after N days (default 3)
+        in: query
+        name: stale_days
+        type: integer
+      - description: Days to wait before retrying tickers with no data (default 7)
+        in: query
+        name: retry_days
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+      summary: Ingest daily stock prices
+      tags:
+      - ingestion
+  /admin/ingest/sp500:
+    post:
+      consumes:
+      - application/json
+      description: Fetches S&P 500 membership history from SHARADAR/SP500 for point-in-time
+        backtesting
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+      summary: Ingest S&P 500 membership history
       tags:
       - ingestion
   /admin/ingest/status:
@@ -156,6 +476,301 @@ paths:
       summary: Ingest company tickers
       tags:
       - ingestion
+  /api/strategies:
+    get:
+      description: Get a list of all saved strategies
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy'
+            type: array
+      summary: List all strategies
+      tags:
+      - strategies
+    post:
+      consumes:
+      - application/json
+      description: Create a new stock screening strategy
+      parameters:
+      - description: Strategy to create
+        in: body
+        name: strategy
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.CreateStrategyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Create a strategy
+      tags:
+      - strategies
+  /api/strategies/{id}:
+    delete:
+      description: Delete a strategy by ID
+      parameters:
+      - description: Strategy ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      responses:
+        "204":
+          description: No Content
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Delete a strategy
+      tags:
+      - strategies
+    get:
+      description: Get a strategy by its ID
+      parameters:
+      - description: Strategy ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get a strategy
+      tags:
+      - strategies
+    put:
+      consumes:
+      - application/json
+      description: Update an existing strategy
+      parameters:
+      - description: Strategy ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Strategy updates
+        in: body
+        name: strategy
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.UpdateStrategyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Update a strategy
+      tags:
+      - strategies
+  /api/strategies/{id}/backtest:
+    post:
+      consumes:
+      - application/json
+      description: Run a historical backtest for a strategy against SPY benchmark
+      parameters:
+      - description: Strategy ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: Backtest configuration
+        in: body
+        name: config
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers.BacktestRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestResult'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Run backtest
+      tags:
+      - strategies
+  /api/strategies/{id}/run:
+    post:
+      description: Execute a strategy and get stock recommendations
+      parameters:
+      - description: Strategy ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.RunResult'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Run a strategy
+      tags:
+      - strategies
+  /api/strategies/{id}/runs:
+    get:
+      description: Get execution history for a strategy
+      parameters:
+      - description: Strategy ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 10
+        description: Maximum number of runs to return
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.StrategyRun'
+            type: array
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get strategy runs
+      tags:
+      - strategies
+  /api/strategies/{id}/stats:
+    get:
+      description: Get aggregate statistics for strategy runs
+      parameters:
+      - description: Strategy ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.RunStats'
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Get strategy statistics
+      tags:
+      - strategies
+  /api/strategies/preview:
+    post:
+      consumes:
+      - application/json
+      description: Test strategy rules without saving
+      parameters:
+      - description: Strategy to preview
+        in: body
+        name: strategy
+        required: true
+        schema:
+          $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.CreateStrategyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.RunResult'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Preview a strategy
+      tags:
+      - strategies
+  /api/strategy-fields:
+    get:
+      description: Get metadata about available fields for strategy filters and ranking
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            items:
+              $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.FieldMeta'
+            type: array
+      summary: Get available fields
+      tags:
+      - strategies
   /health:
     get:
       description: Returns the health status of the application

@@ -1,0 +1,731 @@
+package views
+
+import "github.com/mauv0809/crispy-broccoli/internal/strategy"
+import "fmt"
+import "strings"
+
+templ StrategyForm(s *strategy.Strategy, fields []strategy.FieldMeta) {
+	@Layout(formTitle(s)) {
+		<div class="max-w-4xl mx-auto space-y-6">
+			<!-- Header -->
+			<div class="flex items-center gap-3 mb-4">
+				<a href={ templ.SafeURL(backURL(s)) } class="btn btn-ghost btn-sm">
+					<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
+					</svg>
+					Back
+				</a>
+				<h1 class="text-xl font-bold text-primary">{ formTitle(s) }</h1>
+			</div>
+
+			<!-- Form -->
+			<form
+				id="strategy-form"
+				x-data={ initFormData(s) }
+				@submit.prevent="submitForm()"
+				class="space-y-6"
+			>
+				<!-- Basic Info -->
+				<div class="card bg-base-200">
+					<div class="card-body">
+						<h3 class="card-title text-lg">Basic Information</h3>
+						<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+							<div class="form-control">
+								<label class="label">
+									<span class="label-text font-medium">Strategy Name</span>
+								</label>
+								<input
+									type="text"
+									name="name"
+									x-model="name"
+									class="input input-bordered"
+									placeholder="My Value Strategy"
+									required
+								/>
+							</div>
+							<div class="form-control">
+								<label class="label">
+									<span class="label-text font-medium">Dimension</span>
+								</label>
+								<select name="dimension" x-model="rules.dimension" class="select select-bordered">
+									<option value="ARQ">ARQ (As-Reported Quarterly)</option>
+									<option value="MRQ">MRQ (Most Recent Quarterly)</option>
+									<option value="ARY">ARY (As-Reported Yearly)</option>
+									<option value="MRY">MRY (Most Recent Yearly)</option>
+									<option value="ART">ART (As-Reported TTM)</option>
+									<option value="MRT">MRT (Most Recent TTM)</option>
+								</select>
+							</div>
+							<div class="form-control">
+								<label class="label">
+									<span class="label-text font-medium">Universe</span>
+								</label>
+								<select name="universe" x-model="rules.universe" class="select select-bordered">
+									<option value="">All Stocks</option>
+									<option value="sp500">S&P 500</option>
+								</select>
+							</div>
+						</div>
+						<div class="form-control">
+							<label class="label">
+								<span class="label-text font-medium">Description</span>
+							</label>
+							<textarea
+								name="description"
+								x-model="description"
+								class="textarea textarea-bordered"
+								placeholder="Describe what this strategy looks for..."
+								rows="2"
+							></textarea>
+						</div>
+						<div class="form-control">
+							<label class="label">
+								<span class="label-text font-medium">Portfolio Size (Top N stocks)</span>
+							</label>
+							<input
+								type="number"
+								name="limit"
+								x-model.number="rules.limit"
+								class="input input-bordered w-32"
+								min="1"
+								max="100"
+							/>
+						</div>
+					</div>
+				</div>
+
+				<!-- Filters -->
+				<div class="card bg-base-200">
+					<div class="card-body">
+						<div class="flex items-center justify-between">
+							<h3 class="card-title text-lg">Filters</h3>
+							<button type="button" @click="addFilter()" class="btn btn-sm btn-primary">
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+								</svg>
+								Add Filter
+							</button>
+						</div>
+						<p class="text-sm text-base-content/70">Define criteria to filter stocks before ranking</p>
+
+						<template x-if="rules.filters.length === 0">
+							<p class="text-base-content/50 text-sm py-4 text-center">No filters configured. Click "Add Filter" to add one.</p>
+						</template>
+
+						<div class="space-y-3 mt-4">
+							<template x-for="(filter, index) in rules.filters" :key="index">
+								<div class="flex flex-wrap items-center gap-2 bg-base-100 rounded-lg p-3">
+									<select x-model="filter.field" class="select select-bordered select-sm">
+										<option value="">Select field...</option>
+										for _, f := range fields {
+											<option value={ f.Name }>{ f.Label }</option>
+										}
+									</select>
+									<select x-model="filter.operator" class="select select-bordered select-sm">
+										<option value=">=">&gt;=</option>
+										<option value="<=">&lt;=</option>
+										<option value=">">&gt;</option>
+										<option value="<">&lt;</option>
+										<option value="=">=</option>
+										<option value="!=">!=</option>
+										<option value=">=median">&gt;= median</option>
+										<option value=">=p25">&gt;= 25th pct</option>
+										<option value=">=p75">&gt;= 75th pct</option>
+										<option value="<=median">&lt;= median</option>
+										<option value="<=p25">&lt;= 25th pct</option>
+										<option value="<=p75">&lt;= 75th pct</option>
+										<option value="in">in</option>
+										<option value="not_in">not in</option>
+										<option value="is_not_null">is not null</option>
+									</select>
+									<template x-if="!['is_null', 'is_not_null', 'in', 'not_in', '>=median', '>=p25', '>=p75', '<=median', '<=p25', '<=p75'].includes(filter.operator)">
+										<input
+											type="text"
+											x-model="filter.value"
+											class="input input-bordered input-sm w-32"
+											placeholder="Value"
+										/>
+									</template>
+									<template x-if="filter.operator === 'in' || filter.operator === 'not_in'">
+										<input
+											type="text"
+											x-model="filter.valueText"
+											@change="filter.value = filter.valueText.split(',').map(s => s.trim()).filter(s => s)"
+											class="input input-bordered input-sm w-48"
+											placeholder="value1, value2, ..."
+										/>
+									</template>
+									<button type="button" @click="removeFilter(index)" class="btn btn-sm btn-ghost text-error">
+										<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+										</svg>
+									</button>
+								</div>
+							</template>
+						</div>
+					</div>
+				</div>
+
+				<!-- Ranking -->
+				<div class="card bg-base-200">
+					<div class="card-body">
+						<div class="flex items-center justify-between">
+							<h3 class="card-title text-lg">Ranking Criteria</h3>
+							<button type="button" @click="addRanking()" class="btn btn-sm btn-primary">
+								<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4v16m8-8H4"/>
+								</svg>
+								Add Ranking
+							</button>
+						</div>
+						<p class="text-sm text-base-content/70">Define how to score and rank filtered stocks (weights must sum to 100%)</p>
+
+						<template x-if="rules.ranking.length === 0">
+							<p class="text-base-content/50 text-sm py-4 text-center">No ranking configured. Click "Add Ranking" to add one.</p>
+						</template>
+
+						<div class="space-y-3 mt-4">
+							<template x-for="(rank, index) in rules.ranking" :key="index">
+								<div class="flex flex-wrap items-center gap-2 bg-base-100 rounded-lg p-3">
+									<select x-model="rank.field" class="select select-bordered select-sm">
+										<option value="">Select field...</option>
+										for _, f := range fields {
+											if f.Rankable {
+												<option value={ f.Name }>{ f.Label }</option>
+											}
+										}
+									</select>
+									<select x-model="rank.direction" class="select select-bordered select-sm">
+										<option value="asc">Low is better</option>
+										<option value="desc">High is better</option>
+									</select>
+									<div class="flex items-center gap-1">
+										<input
+											type="number"
+											x-model.number="rank.weight"
+											class="input input-bordered input-sm w-20"
+											min="0"
+											max="100"
+										/>
+										<span class="text-sm">%</span>
+									</div>
+									<button type="button" @click="removeRanking(index)" class="btn btn-sm btn-ghost text-error">
+										<svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+										</svg>
+									</button>
+								</div>
+							</template>
+						</div>
+
+						<!-- Weight total indicator -->
+						<template x-if="rules.ranking.length > 0">
+							<div class="mt-2 text-sm">
+								<span class="font-medium">Total weight: </span>
+								<span :class="totalWeight() === 100 ? 'text-success' : 'text-error'" x-text="totalWeight() + '%'"></span>
+								<template x-if="totalWeight() !== 100">
+									<span class="text-error ml-2">(must equal 100%)</span>
+								</template>
+							</div>
+						</template>
+					</div>
+				</div>
+
+				<!-- Portfolio Weights -->
+				<div class="card bg-base-200">
+					<div class="card-body">
+						<div class="flex items-center justify-between">
+							<h3 class="card-title text-lg">Portfolio Weights (Optional)</h3>
+							<label class="flex items-center gap-2 cursor-pointer">
+								<input type="checkbox" x-model="customWeightsEnabled" class="checkbox checkbox-sm"/>
+								<span class="text-sm">Use custom weights</span>
+							</label>
+						</div>
+						<p class="text-sm text-base-content/70">Customize how capital is allocated across ranked positions (default: higher ranks get more weight)</p>
+
+						<template x-if="customWeightsEnabled">
+							<div class="mt-4 space-y-3">
+								<div class="flex flex-wrap gap-2 items-center">
+									<template x-for="(w, index) in rules.weights" :key="index">
+										<div class="flex items-center gap-1 bg-base-100 rounded px-2 py-1">
+											<span class="text-xs text-base-content/70" x-text="'#' + (index + 1)"></span>
+											<input
+												type="number"
+												x-model.number="rules.weights[index]"
+												class="input input-bordered input-xs w-16"
+												min="0"
+												max="100"
+												step="1"
+											/>
+											<span class="text-xs">%</span>
+										</div>
+									</template>
+									<button type="button" @click="addWeight()" class="btn btn-xs btn-ghost">+</button>
+									<button type="button" @click="removeWeight()" class="btn btn-xs btn-ghost" x-show="rules.weights.length > 1">-</button>
+								</div>
+								<div class="text-sm">
+									<span class="font-medium">Total: </span>
+									<span :class="weightsTotal() === 100 ? 'text-success' : 'text-error'" x-text="weightsTotal() + '%'"></span>
+									<template x-if="weightsTotal() !== 100">
+										<span class="text-error ml-2">(must equal 100%)</span>
+									</template>
+								</div>
+								<p class="text-xs text-base-content/50">
+									Example: [25, 25, 15, 15, 10, 10] means #1 and #2 get 25% each, #3 and #4 get 15% each, etc.
+								</p>
+							</div>
+						</template>
+					</div>
+				</div>
+
+				<!-- Preview & Submit -->
+				<div class="card bg-base-200">
+					<div class="card-body">
+						<div class="flex flex-wrap gap-3 justify-between items-center">
+							<div class="flex gap-2">
+								<button
+									type="button"
+									class="btn btn-outline btn-sm"
+									@click="previewStrategy()"
+									:disabled="!isValid() || previewing"
+									x-text="previewing ? 'Loading...' : 'Preview'"
+								>
+								</button>
+							</div>
+							<div class="flex gap-2">
+								<a href={ templ.SafeURL(backURL(s)) } class="btn btn-ghost btn-sm">Cancel</a>
+								<button
+									type="submit"
+									class="btn btn-primary btn-sm"
+									:disabled="!isValid()"
+								>
+									if s != nil && s.ID > 0 {
+										Update
+									} else {
+										Create
+									}
+								</button>
+							</div>
+						</div>
+
+						<!-- Form result messages -->
+						<div id="form-result" class="mt-4"></div>
+
+						<!-- Preview results -->
+						<div id="preview-results" class="mt-4"></div>
+					</div>
+				</div>
+			</form>
+		</div>
+
+		<!-- Alpine.js form logic -->
+		<script>
+			function strategyFormData(initial) {
+				return {
+					strategyId: initial.id || 0,
+					name: initial.name || '',
+					description: initial.description || '',
+					rules: {
+						dimension: initial.rules?.dimension || 'ARQ',
+						limit: initial.rules?.limit || 20,
+						universe: initial.rules?.universe || '',
+						filters: initial.rules?.filters || [],
+						ranking: initial.rules?.ranking || [],
+						weights: initial.rules?.weights || [25, 25, 15, 15, 10, 10]
+					},
+					customWeightsEnabled: (initial.rules?.weights && initial.rules.weights.length > 0) || false,
+					submitting: false,
+					previewing: false,
+
+					addFilter() {
+						this.rules.filters.push({ field: '', operator: '>=', value: '' });
+					},
+
+					removeFilter(index) {
+						this.rules.filters.splice(index, 1);
+					},
+
+					addRanking() {
+						this.rules.ranking.push({ field: '', direction: 'desc', weight: 0 });
+					},
+
+					removeRanking(index) {
+						this.rules.ranking.splice(index, 1);
+					},
+
+					addWeight() {
+						this.rules.weights.push(0);
+					},
+
+					removeWeight() {
+						if (this.rules.weights.length > 1) {
+							this.rules.weights.pop();
+						}
+					},
+
+					weightsTotal() {
+						return this.rules.weights.reduce((sum, w) => sum + (w || 0), 0);
+					},
+
+					totalWeight() {
+						return this.rules.ranking.reduce((sum, r) => sum + (r.weight || 0), 0);
+					},
+
+					isValid() {
+						if (!this.name.trim()) return false;
+						if (this.rules.ranking.length > 0 && this.totalWeight() !== 100) return false;
+						// Check custom weights if enabled
+						if (this.customWeightsEnabled && this.weightsTotal() !== 100) return false;
+						// Operators that don't need a value
+						const noValueOps = ['is_null', 'is_not_null', '>=median', '>=p25', '>=p75', '<=median', '<=p25', '<=p75'];
+						// Check all filters have field and value (unless using no-value operator)
+						for (const f of this.rules.filters) {
+							if (!f.field) return false;
+							// Skip operators that don't need a value
+							if (noValueOps.includes(f.operator)) continue;
+							// For in/not_in operators, check array has values
+							if (f.operator === 'in' || f.operator === 'not_in') {
+								if (!Array.isArray(f.value) || f.value.length === 0) return false;
+							} else {
+								// Allow 0 as a valid value, only reject empty/undefined/null
+								if (f.value === '' || f.value === undefined || f.value === null) return false;
+							}
+						}
+						// Check all rankings have field
+						for (const r of this.rules.ranking) {
+							if (!r.field) return false;
+						}
+						return true;
+					},
+
+					async submitForm() {
+						if (!this.isValid() || this.submitting) return;
+						this.submitting = true;
+
+						// Build request data with proper types
+						const data = {
+							name: this.name,
+							description: this.description,
+							rules: JSON.parse(JSON.stringify(this.rules)) // Deep clone
+						};
+
+						// Convert filter values to proper types
+						for (const f of data.rules.filters) {
+							// Skip array values (for in/not_in operators)
+							if (Array.isArray(f.value)) continue;
+							// Convert numeric strings to numbers
+							if (f.value !== '' && !isNaN(parseFloat(f.value))) {
+								f.value = parseFloat(f.value);
+							}
+						}
+
+						// Handle weights: convert percentages to decimals, or remove if not enabled
+						if (this.customWeightsEnabled && this.rules.weights.length > 0) {
+							data.rules.weights = this.rules.weights.map(w => w / 100);
+						} else {
+							delete data.rules.weights;
+						}
+
+						const isUpdate = this.strategyId > 0;
+						const url = isUpdate ? `/api/strategies/${this.strategyId}` : '/api/strategies';
+						const method = isUpdate ? 'PUT' : 'POST';
+
+						try {
+							const resp = await fetch(url, {
+								method: method,
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify(data)
+							});
+
+							const result = await resp.json();
+
+							if (resp.ok) {
+								// Redirect to strategy detail page
+								const redirectUrl = `/strategies/${result.id || this.strategyId}`;
+								window.location.href = redirectUrl;
+							} else {
+								document.getElementById('form-result').innerHTML =
+									`<div class="alert alert-error"><span>${result.error || 'Failed to save strategy'}</span></div>`;
+							}
+						} catch (err) {
+							document.getElementById('form-result').innerHTML =
+								`<div class="alert alert-error"><span>Network error: ${err.message}</span></div>`;
+						} finally {
+							this.submitting = false;
+						}
+					},
+
+					async previewStrategy() {
+						if (this.previewing) return;
+						this.previewing = true;
+
+						const data = {
+							name: this.name,
+							description: this.description,
+							rules: JSON.parse(JSON.stringify(this.rules))
+						};
+						// Convert filter values to proper types
+						for (const f of data.rules.filters) {
+							if (Array.isArray(f.value)) continue;
+							if (f.value !== '' && !isNaN(parseFloat(f.value))) {
+								f.value = parseFloat(f.value);
+							}
+						}
+
+						try {
+							const resp = await fetch('/api/strategies/preview', {
+								method: 'POST',
+								headers: { 'Content-Type': 'application/json' },
+								body: JSON.stringify(data)
+							});
+							const result = await resp.json();
+
+							if (!resp.ok) {
+								document.getElementById('preview-results').innerHTML =
+									`<div class="alert alert-error"><span>${result.error || 'Preview failed'}</span></div>`;
+								return;
+							}
+
+							// Render preview results
+							let html = `<div class="space-y-4">
+								<h4 class="font-medium">Preview Results</h4>
+								<div class="flex flex-wrap gap-2 text-sm">
+									<span class="badge badge-outline">${result.stocks_screened} stocks screened</span>
+									<span class="badge badge-primary">${result.stocks_matched} matches</span>
+									<span class="badge badge-outline">${result.execution_time_ms}ms</span>
+								</div>`;
+
+							if (result.recommendations && result.recommendations.length > 0) {
+								html += `<div class="overflow-x-auto max-h-64">
+									<table class="table table-sm table-zebra">
+										<thead class="sticky top-0 bg-base-200">
+											<tr><th>Rank</th><th>Ticker</th><th>Company</th><th>Score</th></tr>
+										</thead>
+										<tbody>`;
+								for (const rec of result.recommendations) {
+									const fallbackBadge = rec.is_fallback ? '<span class="badge badge-xs badge-warning ml-1">F</span>' : '';
+									html += `<tr>
+										<td class="font-bold text-primary">#${rec.rank}${fallbackBadge}</td>
+										<td class="font-mono">${rec.ticker}</td>
+										<td class="text-sm">${rec.company_name}</td>
+										<td><span class="badge badge-sm badge-primary">${rec.score.toFixed(1)}</span></td>
+									</tr>`;
+								}
+								html += `</tbody></table></div>`;
+							} else {
+								html += `<div class="alert alert-warning"><span>No stocks matched the criteria. Try adjusting the filters.</span></div>`;
+							}
+							html += `</div>`;
+
+							document.getElementById('preview-results').innerHTML = html;
+						} catch (err) {
+							document.getElementById('preview-results').innerHTML =
+								`<div class="alert alert-error"><span>Network error: ${err.message}</span></div>`;
+						} finally {
+							this.previewing = false;
+						}
+					}
+				};
+			}
+		</script>
+	}
+}
+
+func formTitle(s *strategy.Strategy) string {
+	if s != nil && s.ID > 0 {
+		return "Edit Strategy"
+	}
+	return "New Strategy"
+}
+
+func backURL(s *strategy.Strategy) string {
+	if s != nil && s.ID > 0 {
+		return fmt.Sprintf("/strategies/%d", s.ID)
+	}
+	return "/strategies"
+}
+
+func initFormData(s *strategy.Strategy) string {
+	if s == nil {
+		return "strategyFormData({})"
+	}
+	// Build initial data JSON
+	filters := "[]"
+	if len(s.Rules.Filters) > 0 {
+		filters = "["
+		for i, f := range s.Rules.Filters {
+			if i > 0 {
+				filters += ","
+			}
+			// Include valueText for array values (in/not_in operators)
+			valueText := formatValueText(f.Value)
+			if valueText != "" {
+				filters += fmt.Sprintf(`{"field":"%s","operator":"%s","value":%v,"valueText":"%s"}`, f.Field, f.Operator, formatValue(f.Value), escapeJS(valueText))
+			} else {
+				filters += fmt.Sprintf(`{"field":"%s","operator":"%s","value":%v}`, f.Field, f.Operator, formatValue(f.Value))
+			}
+		}
+		filters += "]"
+	}
+
+	ranking := "[]"
+	if len(s.Rules.Ranking) > 0 {
+		ranking = "["
+		for i, r := range s.Rules.Ranking {
+			if i > 0 {
+				ranking += ","
+			}
+			ranking += fmt.Sprintf(`{"field":"%s","direction":"%s","weight":%d}`, r.Field, r.Direction, r.Weight)
+		}
+		ranking += "]"
+	}
+
+	// Build weights array (convert from decimals to percentages for UI)
+	weights := ""
+	if len(s.Rules.Weights) > 0 {
+		weights = "["
+		for i, w := range s.Rules.Weights {
+			if i > 0 {
+				weights += ","
+			}
+			weights += fmt.Sprintf("%d", int(w*100))
+		}
+		weights += "]"
+	}
+
+	if weights != "" {
+		return fmt.Sprintf(`strategyFormData({id:%d,name:"%s",description:"%s",rules:{dimension:"%s",limit:%d,universe:"%s",filters:%s,ranking:%s,weights:%s}})`,
+			s.ID, escapeJS(s.Name), escapeJS(s.Description), s.Rules.Dimension, s.Rules.Limit, s.Rules.Universe, filters, ranking, weights)
+	}
+	return fmt.Sprintf(`strategyFormData({id:%d,name:"%s",description:"%s",rules:{dimension:"%s",limit:%d,universe:"%s",filters:%s,ranking:%s}})`,
+		s.ID, escapeJS(s.Name), escapeJS(s.Description), s.Rules.Dimension, s.Rules.Limit, s.Rules.Universe, filters, ranking)
+}
+
+func formatValue(v interface{}) string {
+	if v == nil {
+		return "null"
+	}
+	switch val := v.(type) {
+	case string:
+		return fmt.Sprintf(`"%s"`, escapeJS(val))
+	case float64:
+		return fmt.Sprintf("%v", val)
+	case int:
+		return fmt.Sprintf("%d", val)
+	case []interface{}:
+		// Handle arrays (for in/not_in operators)
+		items := make([]string, len(val))
+		for i, item := range val {
+			items[i] = formatValue(item)
+		}
+		return "[" + strings.Join(items, ",") + "]"
+	case []string:
+		items := make([]string, len(val))
+		for i, item := range val {
+			items[i] = fmt.Sprintf(`"%s"`, escapeJS(item))
+		}
+		return "[" + strings.Join(items, ",") + "]"
+	default:
+		return fmt.Sprintf(`"%v"`, v)
+	}
+}
+
+// formatValueText converts array values to comma-separated text for the input field
+func formatValueText(v interface{}) string {
+	switch val := v.(type) {
+	case []interface{}:
+		items := make([]string, len(val))
+		for i, item := range val {
+			items[i] = fmt.Sprintf("%v", item)
+		}
+		return strings.Join(items, ", ")
+	case []string:
+		return strings.Join(val, ", ")
+	default:
+		return ""
+	}
+}
+
+func escapeJS(s string) string {
+	// Basic JS string escaping
+	result := ""
+	for _, c := range s {
+		switch c {
+		case '"':
+			result += `\"`
+		case '\\':
+			result += `\\`
+		case '\n':
+			result += `\n`
+		case '\r':
+			result += `\r`
+		default:
+			result += string(c)
+		}
+	}
+	return result
+}
+
+templ FormSuccess(message string, redirectURL string) {
+	<div class="alert alert-success">
+		<svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+		</svg>
+		<span>{ message }</span>
+	</div>
+	if redirectURL != "" {
+		<script>
+			setTimeout(() => window.location.href = '{ redirectURL }', 1000);
+		</script>
+	}
+}
+
+templ FormError(message string) {
+	<div class="alert alert-error">
+		<svg xmlns="http://www.w3.org/2000/svg" class="stroke-current shrink-0 h-6 w-6" fill="none" viewBox="0 0 24 24">
+			<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+		</svg>
+		<span>{ message }</span>
+	</div>
+}
+
+templ PreviewResults(result strategy.RunResult) {
+	<div class="space-y-4">
+		<h4 class="font-medium">Preview Results</h4>
+		<div class="flex flex-wrap gap-2 text-sm">
+			<span class="badge badge-outline">{ fmt.Sprintf("%d stocks screened", result.StocksScreened) }</span>
+			<span class="badge badge-primary">{ fmt.Sprintf("%d matches", result.StocksMatched) }</span>
+			<span class="badge badge-outline">{ fmt.Sprintf("%dms", result.ExecutionTimeMs) }</span>
+		</div>
+		if len(result.Recommendations) > 0 {
+			<div class="overflow-x-auto max-h-64">
+				<table class="table table-sm table-zebra">
+					<thead class="sticky top-0 bg-base-200">
+						<tr>
+							<th>Rank</th>
+							<th>Ticker</th>
+							<th>Company</th>
+							<th>Score</th>
+						</tr>
+					</thead>
+					<tbody>
+						for _, rec := range result.Recommendations {
+							<tr>
+								<td class="font-bold text-primary">{ fmt.Sprintf("#%d", rec.Rank) }</td>
+								<td class="font-mono">{ rec.Ticker }</td>
+								<td class="text-sm">{ rec.CompanyName }</td>
+								<td>
+									<span class="badge badge-sm badge-primary">{ fmt.Sprintf("%.1f", rec.Score) }</span>
+								</td>
+							</tr>
+						}
+					</tbody>
+				</table>
+			</div>
+		} else {
+			<div class="alert alert-warning">
+				<span>No stocks matched the criteria. Try adjusting the filters.</span>
+			</div>
+		}
+	</div>
+}

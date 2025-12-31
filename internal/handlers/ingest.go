@@ -16,15 +16,17 @@ import (
 
 // IngestHandler handles data ingestion endpoints.
 type IngestHandler struct {
-	client *ingest.Client
-	repo   *db.Repository
+	client       *ingest.Client
+	tiingoClient *ingest.TiingoClient
+	repo         *db.Repository
 }
 
 // NewIngestHandler creates a new ingest handler.
-func NewIngestHandler(client *ingest.Client, repo *db.Repository) *IngestHandler {
+func NewIngestHandler(client *ingest.Client, tiingoClient *ingest.TiingoClient, repo *db.Repository) *IngestHandler {
 	return &IngestHandler{
-		client: client,
-		repo:   repo,
+		client:       client,
+		tiingoClient: tiingoClient,
+		repo:         repo,
 	}
 }
 
@@ -139,9 +141,13 @@ func (h *IngestHandler) IngestFundamentals(c echo.Context) error {
 	}
 
 	// Parse query params
+	// Sharadar SF1 dimensions:
+	// ARQ/ARY = As Reported (Quarterly/Yearly)
+	// MRQ/MRY = Most Recent (Quarterly/Yearly)
+	// ART/MRT = Trailing Twelve Months (As Reported/Most Recent)
 	dimensionParam := c.QueryParam("dimension")
 	if dimensionParam == "" {
-		dimensionParam = "ARQ,MRQ"
+		dimensionParam = "ARQ,ARY,MRQ,MRY,ART,MRT"
 	}
 	dimensions := strings.Split(dimensionParam, ",")
 
@@ -238,213 +244,6 @@ func (h *IngestHandler) IngestFundamentals(c echo.Context) error {
 	})
 }
 
-// IngestDaily handles POST /admin/ingest/daily
-// @Summary Ingest daily prices
-// @Description Fetches daily price/fundamental data from SHARADAR/DAILY. If no ticker specified, fetches for all DB companies.
-// @Tags ingestion
-// @Accept json
-// @Produce json
-// @Param ticker query string false "Comma-separated tickers (defaults to all companies in DB)"
-// @Param full query boolean false "Fetch all history (default: incremental)"
-// @Success 200 {object} IngestResponse
-// @Failure 400 {object} IngestResponse
-// @Failure 500 {object} IngestResponse
-// @Router /admin/ingest/daily [post]
-func (h *IngestHandler) IngestDaily(c echo.Context) error {
-	ctx := c.Request().Context()
-	start := time.Now()
-
-	// Parse ticker filter - default to all companies in DB
-	var tickers []string
-	var fetchAllFromDB bool
-	if tickerParam := c.QueryParam("ticker"); tickerParam != "" {
-		tickers = strings.Split(tickerParam, ",")
-		for i := range tickers {
-			tickers[i] = strings.TrimSpace(tickers[i])
-		}
-	} else {
-		// Fetch all tickers from database
-		var err error
-		tickers, err = h.repo.GetAllTickers(ctx)
-		if err != nil {
-			return c.JSON(http.StatusInternalServerError, IngestResponse{
-				Success: false,
-				Message: fmt.Sprintf("Failed to get tickers: %v", err),
-			})
-		}
-		fetchAllFromDB = true
-	}
-
-	if len(tickers) == 0 {
-		return c.JSON(http.StatusBadRequest, IngestResponse{
-			Success: false,
-			Message: "No companies in database. Run /admin/ingest/tickers first.",
-		})
-	}
-
-	fullFetch := c.QueryParam("full") == "true"
-
-	log.Printf("Starting daily price ingestion (tickers: %d, full: %v)...", len(tickers), fullFetch)
-
-	// Determine since date for incremental fetch
-	var since time.Time
-	if !fullFetch {
-		since, _ = h.repo.GetLastSharadarUpdate(ctx, "daily_prices")
-		log.Printf("Incremental fetch since %v", since)
-	}
-
-	// Stream batches with parallel API fetches (5 concurrent) and parallel upserts (3 concurrent)
-	const maxAPIParallel = 5
-	const maxDBParallel = 3
-
-	batchCh := h.client.FetchDailyStream(ctx, tickers, since, maxAPIParallel)
-
-	var totalCount atomic.Int64
-	var wg sync.WaitGroup
-	var fetchErr error
-	sem := make(chan struct{}, maxDBParallel)
-
-	for batch := range batchCh {
-		if batch.Error != nil {
-			fetchErr = batch.Error
-			log.Printf("Error fetching daily batch: %v", batch.Error)
-			continue // Don't stop - try other batches
-		}
-
-		if len(batch.Rows) == 0 {
-			continue
-		}
-
-		// Filter to valid tickers only if we're fetching specific tickers (not all from DB)
-		rowsToUpsert := batch.Rows
-		if !fetchAllFromDB {
-			validRows := make([]ingest.DailyRow, 0, len(batch.Rows))
-			for _, row := range batch.Rows {
-				exists, err := h.repo.CompanyExists(ctx, row.Ticker)
-				if err == nil && exists {
-					validRows = append(validRows, row)
-				}
-			}
-			rowsToUpsert = validRows
-		}
-
-		if len(rowsToUpsert) == 0 {
-			continue
-		}
-
-		sem <- struct{}{} // Acquire DB slot
-
-		wg.Add(1)
-		go func(rows []ingest.DailyRow) {
-			defer wg.Done()
-			defer func() { <-sem }()
-
-			count, err := h.repo.UpsertDailyPrices(ctx, rows)
-			if err != nil {
-				log.Printf("Error upserting daily prices: %v", err)
-			}
-			totalCount.Add(int64(count))
-			log.Printf("Upserted %d daily prices", count)
-		}(rowsToUpsert)
-	}
-
-	wg.Wait()
-
-	count := int(totalCount.Load())
-	elapsed := time.Since(start)
-
-	if fetchErr != nil && count == 0 {
-		return c.JSON(http.StatusInternalServerError, IngestResponse{
-			Success: false,
-			Message: fmt.Sprintf("Failed to fetch daily prices: %v", fetchErr),
-		})
-	}
-
-	log.Printf("Daily price ingestion complete: %d prices in %v", count, elapsed)
-
-	return c.JSON(http.StatusOK, IngestResponse{
-		Success: true,
-		Message: fmt.Sprintf("Successfully ingested %d daily prices", count),
-		Count:   count,
-		Elapsed: elapsed.String(),
-	})
-}
-
-// IngestBenchmarks handles POST /admin/ingest/benchmarks
-// @Summary Ingest benchmark prices
-// @Description Fetches daily data for configured benchmarks (e.g., SPY) from SHARADAR/DAILY
-// @Tags ingestion
-// @Accept json
-// @Produce json
-// @Param full query boolean false "Fetch all history (default: incremental)"
-// @Success 200 {object} IngestResponse
-// @Failure 400 {object} IngestResponse
-// @Failure 500 {object} IngestResponse
-// @Router /admin/ingest/benchmarks [post]
-func (h *IngestHandler) IngestBenchmarks(c echo.Context) error {
-	ctx := c.Request().Context()
-	start := time.Now()
-
-	// Get benchmark tickers from database
-	tickers, err := h.repo.GetBenchmarkTickers(ctx)
-	if err != nil {
-		return c.JSON(http.StatusInternalServerError, IngestResponse{
-			Success: false,
-			Message: fmt.Sprintf("Failed to get benchmark tickers: %v", err),
-		})
-	}
-
-	if len(tickers) == 0 {
-		return c.JSON(http.StatusBadRequest, IngestResponse{
-			Success: false,
-			Message: "No benchmarks configured in database",
-		})
-	}
-
-	fullFetch := c.QueryParam("full") == "true"
-
-	log.Printf("Starting benchmark ingestion (tickers: %v, full: %v)...", tickers, fullFetch)
-
-	// Determine since date for incremental fetch
-	var since time.Time
-	if !fullFetch {
-		since, _ = h.repo.GetLastBenchmarkUpdate(ctx)
-		log.Printf("Incremental fetch since %v", since)
-	}
-
-	// Fetch from API (using same SHARADAR/DAILY endpoint)
-	rows, err := h.client.FetchDaily(ctx, tickers, since)
-	if err != nil {
-		log.Printf("Error fetching benchmark prices: %v", err)
-		return c.JSON(http.StatusInternalServerError, IngestResponse{
-			Success: false,
-			Message: fmt.Sprintf("Failed to fetch benchmark prices: %v", err),
-		})
-	}
-
-	log.Printf("Fetched %d benchmark price rows", len(rows))
-
-	// Upsert to benchmark_prices table
-	count, err := h.repo.UpsertBenchmarkPrices(ctx, rows)
-	if err != nil {
-		log.Printf("Error upserting benchmark prices: %v", err)
-		return c.JSON(http.StatusInternalServerError, IngestResponse{
-			Success: false,
-			Message: fmt.Sprintf("Failed to upsert benchmark prices: %v", err),
-		})
-	}
-
-	elapsed := time.Since(start)
-	log.Printf("Benchmark ingestion complete: %d prices in %v", count, elapsed)
-
-	return c.JSON(http.StatusOK, IngestResponse{
-		Success: true,
-		Message: fmt.Sprintf("Successfully ingested %d benchmark prices", count),
-		Count:   count,
-		Elapsed: elapsed.String(),
-	})
-}
-
 // IngestStatus handles GET /admin/ingest/status
 // @Summary Get ingestion status
 // @Description Returns current data counts and last update timestamps
@@ -459,6 +258,7 @@ func (h *IngestHandler) IngestStatus(c echo.Context) error {
 	metricCount, _ := h.repo.GetMetricCount(ctx)
 	priceCount, _ := h.repo.GetDailyPriceCount(ctx)
 	benchmarkCount, _ := h.repo.GetBenchmarkPriceCount(ctx)
+	sp500Count, _ := h.repo.GetSP500MembershipCount(ctx)
 
 	lastMetricUpdate, _ := h.repo.GetLastSharadarUpdate(ctx, "financial_metrics")
 	lastPriceUpdate, _ := h.repo.GetLastSharadarUpdate(ctx, "daily_prices")
@@ -469,9 +269,373 @@ func (h *IngestHandler) IngestStatus(c echo.Context) error {
 		"metrics":               metricCount,
 		"prices":                priceCount,
 		"benchmark_prices":      benchmarkCount,
+		"sp500_membership":      sp500Count,
 		"last_metric_update":    lastMetricUpdate.Format("2006-01-02"),
 		"last_price_update":     lastPriceUpdate.Format("2006-01-02"),
 		"last_benchmark_update": lastBenchmarkUpdate.Format("2006-01-02"),
+	})
+}
+
+// IngestSP500 handles POST /admin/ingest/sp500
+// @Summary Ingest S&P 500 membership history
+// @Description Fetches S&P 500 membership history from SHARADAR/SP500 for point-in-time backtesting
+// @Tags ingestion
+// @Accept json
+// @Produce json
+// @Success 200 {object} IngestResponse
+// @Failure 500 {object} IngestResponse
+// @Router /admin/ingest/sp500 [post]
+func (h *IngestHandler) IngestSP500(c echo.Context) error {
+	ctx := c.Request().Context()
+	start := time.Now()
+
+	log.Println("Starting S&P 500 membership ingestion...")
+
+	// Fetch full membership history from API
+	rows, err := h.client.FetchSP500History(ctx)
+	if err != nil {
+		log.Printf("Error fetching S&P 500 history: %v", err)
+		return c.JSON(http.StatusInternalServerError, IngestResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed to fetch S&P 500 history: %v", err),
+		})
+	}
+
+	log.Printf("Fetched %d S&P 500 membership records from API", len(rows))
+
+	// Upsert to database
+	count, err := h.repo.UpsertSP500Membership(ctx, rows)
+	if err != nil {
+		log.Printf("Error upserting S&P 500 membership: %v", err)
+		return c.JSON(http.StatusInternalServerError, IngestResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed to upsert S&P 500 membership: %v", err),
+		})
+	}
+
+	elapsed := time.Since(start)
+	log.Printf("S&P 500 membership ingestion complete: %d records in %v", count, elapsed)
+
+	return c.JSON(http.StatusOK, IngestResponse{
+		Success: true,
+		Message: fmt.Sprintf("Successfully ingested %d S&P 500 membership records", count),
+		Count:   count,
+		Elapsed: elapsed.String(),
+	})
+}
+
+// IngestBenchmark handles POST /admin/ingest/benchmark
+// @Summary Ingest benchmark prices
+// @Description Fetches ETF benchmark prices (SPY, QQQ, etc.) from Tiingo - incremental updates
+// @Tags ingestion
+// @Accept json
+// @Produce json
+// @Param ticker query string false "Comma-separated tickers (defaults to SPY)"
+// @Success 200 {object} IngestResponse
+// @Failure 500 {object} IngestResponse
+// @Router /admin/ingest/benchmark [post]
+func (h *IngestHandler) IngestBenchmark(c echo.Context) error {
+	ctx := c.Request().Context()
+	start := time.Now()
+
+	if h.tiingoClient == nil {
+		return c.JSON(http.StatusServiceUnavailable, IngestResponse{
+			Success: false,
+			Message: "Tiingo API not configured (TIINGO_API_KEY not set)",
+		})
+	}
+
+	// Parse ticker filter - default to SPY
+	tickerParam := c.QueryParam("ticker")
+	if tickerParam == "" {
+		tickerParam = "SPY"
+	}
+	tickers := strings.Split(tickerParam, ",")
+	for i := range tickers {
+		tickers[i] = strings.TrimSpace(tickers[i])
+	}
+
+	// Check rate limits
+	limits := h.tiingoClient.GetRateLimits()
+	if limits.IsRateLimited {
+		return c.JSON(http.StatusTooManyRequests, IngestResponse{
+			Success: false,
+			Message: fmt.Sprintf("Rate limited. Resets at %s", limits.ResetTime.Format("15:04:05")),
+		})
+	}
+
+	log.Printf("Starting benchmark ingestion for: %v (hourly remaining: %d)", tickers, limits.HourlyRemaining)
+
+	var totalCount int
+	var skipped int
+	var errors []string
+	endDate := time.Now()
+
+	for _, ticker := range tickers {
+		if !h.tiingoClient.CanFetch(ticker) {
+			errors = append(errors, fmt.Sprintf("%s: rate limited", ticker))
+			continue
+		}
+
+		// Check last date we have for this benchmark - incremental fetch
+		lastDate, err := h.repo.GetLastBenchmarkPriceDateForTicker(ctx, ticker)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: failed to check last date: %v", ticker, err))
+			continue
+		}
+
+		// If we have data from today or yesterday, skip (already up to date)
+		if lastDate.After(endDate.AddDate(0, 0, -2)) {
+			log.Printf("Benchmark %s already up to date (last: %s)", ticker, lastDate.Format("2006-01-02"))
+			skipped++
+			continue
+		}
+
+		// Start from day after last date we have, or 1993 if no data
+		startDate := lastDate.AddDate(0, 0, 1)
+		if lastDate.Year() < 1990 {
+			startDate = time.Date(1993, 1, 1, 0, 0, 0, 0, time.UTC)
+		}
+
+		log.Printf("Fetching %s from %s to %s", ticker, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+
+		rows, err := h.tiingoClient.FetchDaily(ctx, ticker, startDate, endDate)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", ticker, err))
+			continue
+		}
+
+		count, err := h.repo.UpsertBenchmarkPrices(ctx, rows)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: upsert failed: %v", ticker, err))
+			continue
+		}
+
+		totalCount += count
+		log.Printf("Ingested %d benchmark prices for %s", count, ticker)
+	}
+
+	elapsed := time.Since(start)
+
+	if len(errors) > 0 && totalCount == 0 && skipped == 0 {
+		return c.JSON(http.StatusInternalServerError, IngestResponse{
+			Success: false,
+			Message: fmt.Sprintf("Failed: %s", strings.Join(errors, "; ")),
+		})
+	}
+
+	msg := fmt.Sprintf("Ingested %d benchmark prices", totalCount)
+	if skipped > 0 {
+		msg += fmt.Sprintf(", %d already up-to-date", skipped)
+	}
+	if len(errors) > 0 {
+		msg += fmt.Sprintf(" (errors: %s)", strings.Join(errors, "; "))
+	}
+
+	return c.JSON(http.StatusOK, IngestResponse{
+		Success: true,
+		Message: msg,
+		Count:   totalCount,
+		Elapsed: elapsed.String(),
+	})
+}
+
+// IngestPrices handles POST /admin/ingest/prices
+// @Summary Ingest daily stock prices
+// @Description Fetches daily prices for stocks from Tiingo (rate limited: 50/hour) - incremental updates
+// @Tags ingestion
+// @Accept json
+// @Produce json
+// @Param ticker query string false "Comma-separated tickers (defaults to batch of stocks needing prices)"
+// @Param limit query int false "Max tickers to fetch (default 10)"
+// @Param stale_days query int false "Consider data stale after N days (default 3)"
+// @Param retry_days query int false "Days to wait before retrying tickers with no data (default 7)"
+// @Success 200 {object} IngestResponse
+// @Failure 500 {object} IngestResponse
+// @Router /admin/ingest/prices [post]
+func (h *IngestHandler) IngestPrices(c echo.Context) error {
+	ctx := c.Request().Context()
+	start := time.Now()
+
+	if h.tiingoClient == nil {
+		return c.JSON(http.StatusServiceUnavailable, IngestResponse{
+			Success: false,
+			Message: "Tiingo API not configured (TIINGO_API_KEY not set)",
+		})
+	}
+
+	// Check rate limits first
+	limits := h.tiingoClient.GetRateLimits()
+	if limits.IsRateLimited {
+		return c.JSON(http.StatusTooManyRequests, IngestResponse{
+			Success: false,
+			Message: fmt.Sprintf("Rate limited. Resets at %s", limits.ResetTime.Format("15:04:05")),
+		})
+	}
+
+	if limits.HourlyRemaining <= 0 {
+		return c.JSON(http.StatusTooManyRequests, IngestResponse{
+			Success: false,
+			Message: "Hourly rate limit reached (50/hour). Try again later.",
+		})
+	}
+
+	// Parse limit param
+	batchLimit := 10
+	if limitParam := c.QueryParam("limit"); limitParam != "" {
+		fmt.Sscanf(limitParam, "%d", &batchLimit)
+	}
+	if batchLimit > limits.HourlyRemaining {
+		batchLimit = limits.HourlyRemaining
+	}
+
+	// Parse stale_days param (default 3 days)
+	staleDays := 3
+	if staleParam := c.QueryParam("stale_days"); staleParam != "" {
+		fmt.Sscanf(staleParam, "%d", &staleDays)
+	}
+
+	// Parse retry_days param (default 7 days - how long to wait before retrying tickers with no data)
+	retryDays := 7
+	if retryParam := c.QueryParam("retry_days"); retryParam != "" {
+		fmt.Sscanf(retryParam, "%d", &retryDays)
+	}
+
+	// Parse ticker filter or get tickers needing updates
+	type tickerInfo struct {
+		ticker   string
+		lastDate time.Time
+	}
+	var tickersToFetch []tickerInfo
+
+	if tickerParam := c.QueryParam("ticker"); tickerParam != "" {
+		// Explicit tickers - check their last dates
+		tickers := strings.Split(tickerParam, ",")
+		for _, t := range tickers {
+			t = strings.TrimSpace(t)
+			lastDate, _ := h.repo.GetLastPriceDateForTicker(ctx, t)
+			tickersToFetch = append(tickersToFetch, tickerInfo{ticker: t, lastDate: lastDate})
+		}
+	} else {
+		// Get tickers that need price updates (no data or stale)
+		statuses, err := h.repo.GetTickersNeedingPriceUpdate(ctx, batchLimit, staleDays, retryDays)
+		if err != nil {
+			log.Printf("Error getting tickers needing update: %v", err)
+			return c.JSON(http.StatusInternalServerError, IngestResponse{
+				Success: false,
+				Message: fmt.Sprintf("Failed to get tickers: %v", err),
+			})
+		}
+		log.Printf("Found %d tickers needing price update", len(statuses))
+		for _, s := range statuses {
+			tickersToFetch = append(tickersToFetch, tickerInfo{ticker: s.Ticker, lastDate: s.LastDate})
+		}
+	}
+
+	if len(tickersToFetch) == 0 {
+		return c.JSON(http.StatusOK, IngestResponse{
+			Success: true,
+			Message: "All tickers are up to date",
+			Count:   0,
+		})
+	}
+
+	// Limit to available rate limit
+	if len(tickersToFetch) > limits.HourlyRemaining {
+		tickersToFetch = tickersToFetch[:limits.HourlyRemaining]
+	}
+
+	log.Printf("Starting price ingestion for %d tickers (hourly remaining: %d)", len(tickersToFetch), limits.HourlyRemaining)
+
+	var totalCount int
+	var fetched int
+	var noDataCount int
+	var errors []string
+	var attemptedTickers []string
+	endDate := time.Now()
+
+	for _, ti := range tickersToFetch {
+		if !h.tiingoClient.CanFetch(ti.ticker) {
+			log.Printf("Rate limit reached at ticker %s", ti.ticker)
+			break
+		}
+
+		// Incremental: start from day after last date, or 2010 if no data
+		startDate := ti.lastDate.AddDate(0, 0, 1)
+		if ti.lastDate.Year() < 2000 {
+			startDate = time.Date(2010, 1, 1, 0, 0, 0, 0, time.UTC)
+		}
+
+		log.Printf("Fetching %s from %s to %s", ti.ticker, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+
+		rows, err := h.tiingoClient.FetchDaily(ctx, ti.ticker, startDate, endDate)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: %v", ti.ticker, err))
+			if err == ingest.ErrRateLimited {
+				break
+			}
+			continue
+		}
+
+		// Track that we attempted this ticker (even if no data returned)
+		attemptedTickers = append(attemptedTickers, ti.ticker)
+
+		if len(rows) == 0 {
+			// Tiingo returned 200 but no data - ticker not available in their database
+			log.Printf("No price data available for %s (ticker may not be supported by Tiingo)", ti.ticker)
+			noDataCount++
+			continue
+		}
+
+		count, err := h.repo.UpsertDailyPrices(ctx, rows)
+		if err != nil {
+			errors = append(errors, fmt.Sprintf("%s: upsert failed: %v", ti.ticker, err))
+			continue
+		}
+
+		totalCount += count
+		fetched++
+		log.Printf("Ingested %d prices for %s (%d/%d)", count, ti.ticker, fetched, len(tickersToFetch))
+	}
+
+	// Mark all attempted tickers so we don't retry them immediately
+	if len(attemptedTickers) > 0 {
+		if err := h.repo.MarkPriceFetchAttempted(ctx, attemptedTickers); err != nil {
+			log.Printf("Error marking tickers as attempted: %v", err)
+		}
+	}
+
+	elapsed := time.Since(start)
+
+	// Get updated rate limits
+	newLimits := h.tiingoClient.GetRateLimits()
+
+	// Check if we hit rate limit during this batch
+	if newLimits.IsRateLimited || newLimits.HourlyRemaining == 0 {
+		msg := fmt.Sprintf("Ingested %d prices for %d tickers. RATE LIMITED - resets at %s",
+			totalCount, fetched, newLimits.ResetTime.Format("15:04:05"))
+		return c.JSON(http.StatusOK, IngestResponse{
+			Success: totalCount > 0,
+			Message: msg,
+			Count:   totalCount,
+			Elapsed: elapsed.String(),
+		})
+	}
+
+	msg := fmt.Sprintf("Ingested %d prices for %d tickers. Rate limit: %d/hour remaining",
+		totalCount, fetched, newLimits.HourlyRemaining)
+	if noDataCount > 0 {
+		msg += fmt.Sprintf(", %d tickers with no data (will retry in %d days)", noDataCount, retryDays)
+	}
+	if len(errors) > 0 {
+		msg += fmt.Sprintf(" (errors: %d)", len(errors))
+	}
+
+	return c.JSON(http.StatusOK, IngestResponse{
+		Success: true,
+		Message: msg,
+		Count:   totalCount,
+		Elapsed: elapsed.String(),
 	})
 }
 

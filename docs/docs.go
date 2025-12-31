@@ -15,9 +15,9 @@ const docTemplate = `{
     "host": "{{.Host}}",
     "basePath": "{{.BasePath}}",
     "paths": {
-        "/admin/ingest/benchmarks": {
+        "/admin/ingest/benchmark": {
             "post": {
-                "description": "Fetches daily data for configured benchmarks (e.g., SPY) from SHARADAR/DAILY",
+                "description": "Fetches ETF benchmark prices (SPY, QQQ, etc.) from Tiingo - incremental updates",
                 "consumes": [
                     "application/json"
                 ],
@@ -30,70 +30,15 @@ const docTemplate = `{
                 "summary": "Ingest benchmark prices",
                 "parameters": [
                     {
-                        "type": "boolean",
-                        "description": "Fetch all history (default: incremental)",
-                        "name": "full",
-                        "in": "query"
-                    }
-                ],
-                "responses": {
-                    "200": {
-                        "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handlers.IngestResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handlers.IngestResponse"
-                        }
-                    },
-                    "500": {
-                        "description": "Internal Server Error",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handlers.IngestResponse"
-                        }
-                    }
-                }
-            }
-        },
-        "/admin/ingest/daily": {
-            "post": {
-                "description": "Fetches daily price/fundamental data from SHARADAR/DAILY. If no ticker specified, fetches for all DB companies.",
-                "consumes": [
-                    "application/json"
-                ],
-                "produces": [
-                    "application/json"
-                ],
-                "tags": [
-                    "ingestion"
-                ],
-                "summary": "Ingest daily prices",
-                "parameters": [
-                    {
                         "type": "string",
-                        "description": "Comma-separated tickers (defaults to all companies in DB)",
+                        "description": "Comma-separated tickers (defaults to SPY)",
                         "name": "ticker",
                         "in": "query"
-                    },
-                    {
-                        "type": "boolean",
-                        "description": "Fetch all history (default: incremental)",
-                        "name": "full",
-                        "in": "query"
                     }
                 ],
                 "responses": {
                     "200": {
                         "description": "OK",
-                        "schema": {
-                            "$ref": "#/definitions/internal_handlers.IngestResponse"
-                        }
-                    },
-                    "400": {
-                        "description": "Bad Request",
                         "schema": {
                             "$ref": "#/definitions/internal_handlers.IngestResponse"
                         }
@@ -150,6 +95,90 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.IngestResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.IngestResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ingest/prices": {
+            "post": {
+                "description": "Fetches daily prices for stocks from Tiingo (rate limited: 50/hour) - incremental updates",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ingestion"
+                ],
+                "summary": "Ingest daily stock prices",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Comma-separated tickers (defaults to batch of stocks needing prices)",
+                        "name": "ticker",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max tickers to fetch (default 10)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Consider data stale after N days (default 3)",
+                        "name": "stale_days",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Days to wait before retrying tickers with no data (default 7)",
+                        "name": "retry_days",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.IngestResponse"
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.IngestResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/ingest/sp500": {
+            "post": {
+                "description": "Fetches S\u0026P 500 membership history from SHARADAR/SP500 for point-in-time backtesting",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ingestion"
+                ],
+                "summary": "Ingest S\u0026P 500 membership history",
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "$ref": "#/definitions/internal_handlers.IngestResponse"
                         }
@@ -221,6 +250,453 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/strategies": {
+            "get": {
+                "description": "Get a list of all saved strategies",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "List all strategies",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy"
+                            }
+                        }
+                    }
+                }
+            },
+            "post": {
+                "description": "Create a new stock screening strategy",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "Create a strategy",
+                "parameters": [
+                    {
+                        "description": "Strategy to create",
+                        "name": "strategy",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.CreateStrategyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "Created",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/strategies/preview": {
+            "post": {
+                "description": "Test strategy rules without saving",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "Preview a strategy",
+                "parameters": [
+                    {
+                        "description": "Strategy to preview",
+                        "name": "strategy",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.CreateStrategyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.RunResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/strategies/{id}": {
+            "get": {
+                "description": "Get a strategy by its ID",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "Get a strategy",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Strategy ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "put": {
+                "description": "Update an existing strategy",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "Update a strategy",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Strategy ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Strategy updates",
+                        "name": "strategy",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.UpdateStrategyRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            },
+            "delete": {
+                "description": "Delete a strategy by ID",
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "Delete a strategy",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Strategy ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "No Content"
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/strategies/{id}/backtest": {
+            "post": {
+                "description": "Run a historical backtest for a strategy against SPY benchmark",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "Run backtest",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Strategy ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "description": "Backtest configuration",
+                        "name": "config",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.BacktestRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestResult"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/strategies/{id}/run": {
+            "post": {
+                "description": "Execute a strategy and get stock recommendations",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "Run a strategy",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Strategy ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.RunResult"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Internal Server Error",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/strategies/{id}/runs": {
+            "get": {
+                "description": "Get execution history for a strategy",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "Get strategy runs",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Strategy ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "integer",
+                        "default": 10,
+                        "description": "Maximum number of runs to return",
+                        "name": "limit",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.StrategyRun"
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/strategies/{id}/stats": {
+            "get": {
+                "description": "Get aggregate statistics for strategy runs",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "Get strategy statistics",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "Strategy ID",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.RunStats"
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "/api/strategy-fields": {
+            "get": {
+                "description": "Get metadata about available fields for strategy filters and ranking",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "strategies"
+                ],
+                "summary": "Get available fields",
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.FieldMeta"
+                            }
+                        }
+                    }
+                }
+            }
+        },
         "/health": {
             "get": {
                 "description": "Returns the health status of the application",
@@ -246,6 +722,440 @@ const docTemplate = `{
         }
     },
     "definitions": {
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestConfig": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "type": "string"
+                },
+                "initial_capital": {
+                    "type": "number"
+                },
+                "lag_days": {
+                    "description": "Days before rebalance to use for fundamentals (default 60)",
+                    "type": "integer"
+                },
+                "rebalance_freq": {
+                    "description": "\"monthly\", \"quarterly\", \"semi-annual\", \"annual\"",
+                    "type": "string"
+                },
+                "start_date": {
+                    "type": "string"
+                },
+                "strategy_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestPeriod": {
+            "type": "object",
+            "properties": {
+                "cumulative_val": {
+                    "description": "Portfolio value at end of period",
+                    "type": "number"
+                },
+                "end_date": {
+                    "type": "string"
+                },
+                "holdings": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Holding"
+                    }
+                },
+                "period_return": {
+                    "description": "Return for this period",
+                    "type": "number"
+                },
+                "start_date": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestResult": {
+            "type": "object",
+            "properties": {
+                "alpha": {
+                    "description": "Excess return vs benchmark",
+                    "type": "number"
+                },
+                "annualized_return": {
+                    "description": "CAGR",
+                    "type": "number"
+                },
+                "benchmark_annualized": {
+                    "description": "SPY CAGR",
+                    "type": "number"
+                },
+                "benchmark_curve": {
+                    "description": "For charting",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.CurvePoint"
+                    }
+                },
+                "benchmark_return": {
+                    "description": "SPY total return",
+                    "type": "number"
+                },
+                "config": {
+                    "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestConfig"
+                },
+                "execution_time_ms": {
+                    "type": "integer"
+                },
+                "max_drawdown": {
+                    "description": "Maximum peak-to-trough decline",
+                    "type": "number"
+                },
+                "periods": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.BacktestPeriod"
+                    }
+                },
+                "portfolio_curve": {
+                    "description": "For charting",
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.CurvePoint"
+                    }
+                },
+                "sharpe_ratio": {
+                    "description": "Risk-adjusted return (if we add volatility calc)",
+                    "type": "number"
+                },
+                "total_return": {
+                    "description": "Total percentage return",
+                    "type": "number"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.CreateStrategyRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "rules": {
+                    "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Rules"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.CurvePoint": {
+            "type": "object",
+            "properties": {
+                "date": {
+                    "type": "string"
+                },
+                "value": {
+                    "description": "Normalized value (starts at 1.0)",
+                    "type": "number"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.FieldMeta": {
+            "type": "object",
+            "properties": {
+                "column": {
+                    "description": "actual DB column name if different",
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "label": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "operators": {
+                    "description": "Valid operators for this field",
+                    "type": "array",
+                    "items": {
+                        "type": "string"
+                    }
+                },
+                "rankable": {
+                    "description": "Can this field be used in ranking?",
+                    "type": "boolean"
+                },
+                "table": {
+                    "description": "financial_metrics or daily_prices",
+                    "type": "string"
+                },
+                "type": {
+                    "description": "number, text, boolean",
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.Filter": {
+            "type": "object",
+            "properties": {
+                "field": {
+                    "type": "string"
+                },
+                "operator": {
+                    "type": "string"
+                },
+                "value": {}
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.Holding": {
+            "type": "object",
+            "properties": {
+                "entry_price": {
+                    "description": "Price at period start",
+                    "type": "number"
+                },
+                "exit_price": {
+                    "description": "Price at period end",
+                    "type": "number"
+                },
+                "is_fallback": {
+                    "description": "True if added via fallback (didn't pass filters)",
+                    "type": "boolean"
+                },
+                "rank": {
+                    "type": "integer"
+                },
+                "return": {
+                    "description": "Individual stock return",
+                    "type": "number"
+                },
+                "ticker": {
+                    "type": "string"
+                },
+                "weight": {
+                    "description": "Portfolio weight (0-1)",
+                    "type": "number"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.Ranking": {
+            "type": "object",
+            "properties": {
+                "direction": {
+                    "description": "asc or desc",
+                    "type": "string"
+                },
+                "field": {
+                    "type": "string"
+                },
+                "weight": {
+                    "description": "percentage, must sum to 100",
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.Recommendation": {
+            "type": "object",
+            "properties": {
+                "company_name": {
+                    "type": "string"
+                },
+                "is_fallback": {
+                    "description": "True if this stock didn't pass all filters but was added to fill quota",
+                    "type": "boolean"
+                },
+                "metrics": {
+                    "description": "All requested fields",
+                    "type": "object",
+                    "additionalProperties": {}
+                },
+                "rank": {
+                    "type": "integer"
+                },
+                "score": {
+                    "type": "number"
+                },
+                "sector": {
+                    "type": "string"
+                },
+                "ticker": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.Rules": {
+            "type": "object",
+            "properties": {
+                "dimension": {
+                    "description": "MRQ, MRY, ARQ, ARY",
+                    "type": "string"
+                },
+                "filters": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Filter"
+                    }
+                },
+                "limit": {
+                    "type": "integer"
+                },
+                "ranking": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Ranking"
+                    }
+                },
+                "universe": {
+                    "description": "Optional: \"sp500\" to restrict to S\u0026P 500 members, empty for all stocks",
+                    "type": "string"
+                },
+                "weights": {
+                    "description": "Optional custom portfolio weights (must sum to 1.0)",
+                    "type": "array",
+                    "items": {
+                        "type": "number"
+                    }
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.RunResult": {
+            "type": "object",
+            "properties": {
+                "execution_time_ms": {
+                    "type": "integer"
+                },
+                "recommendations": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Recommendation"
+                    }
+                },
+                "run_at": {
+                    "type": "string"
+                },
+                "stocks_matched": {
+                    "type": "integer"
+                },
+                "stocks_screened": {
+                    "type": "integer"
+                },
+                "strategy_id": {
+                    "type": "integer"
+                },
+                "strategy_name": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.RunStats": {
+            "type": "object",
+            "properties": {
+                "avg_execution_time_ms": {
+                    "type": "number"
+                },
+                "avg_stocks_matched": {
+                    "type": "number"
+                },
+                "last_run_at": {
+                    "type": "string"
+                },
+                "total_runs": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy": {
+            "type": "object",
+            "properties": {
+                "created_at": {
+                    "type": "string"
+                },
+                "description": {
+                    "type": "string"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "is_default": {
+                    "type": "boolean"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "rules": {
+                    "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Rules"
+                },
+                "updated_at": {
+                    "type": "string"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.StrategyRun": {
+            "type": "object",
+            "properties": {
+                "execution_time_ms": {
+                    "type": "integer"
+                },
+                "id": {
+                    "type": "integer"
+                },
+                "results": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Recommendation"
+                    }
+                },
+                "run_at": {
+                    "type": "string"
+                },
+                "stocks_matched": {
+                    "type": "integer"
+                },
+                "stocks_screened": {
+                    "type": "integer"
+                },
+                "strategy_id": {
+                    "type": "integer"
+                }
+            }
+        },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.UpdateStrategyRequest": {
+            "type": "object",
+            "properties": {
+                "description": {
+                    "type": "string"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "rules": {
+                    "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Rules"
+                }
+            }
+        },
+        "internal_handlers.BacktestRequest": {
+            "type": "object",
+            "properties": {
+                "end_date": {
+                    "description": "Format: YYYY-MM-DD",
+                    "type": "string"
+                },
+                "initial_capital": {
+                    "type": "number"
+                },
+                "lag_days": {
+                    "description": "Default 60",
+                    "type": "integer"
+                },
+                "rebalance_freq": {
+                    "description": "monthly, quarterly, semi-annual, annual",
+                    "type": "string"
+                },
+                "start_date": {
+                    "description": "Format: YYYY-MM-DD",
+                    "type": "string"
+                }
+            }
+        },
         "internal_handlers.IngestResponse": {
             "type": "object",
             "properties": {

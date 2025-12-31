@@ -167,6 +167,9 @@ func ParseSF1(resp *Response) ([]SF1Row, error) {
 			EV:           getDecimal(row, idx, "ev"),
 			Price:        getDecimal(row, idx, "price"),
 			ReportPeriod: getTime(row, idx, "reportperiod"),
+			Assets:       getDecimal(row, idx, "assets"),
+			Equity:       getDecimal(row, idx, "equity"),
+			GrossProfit:  getDecimal(row, idx, "gp"),
 		}
 		if sr.Ticker != "" {
 			rows = append(rows, sr)
@@ -251,5 +254,59 @@ func ParseSP500(resp *Response) ([]SP500Row, error) {
 		}
 	}
 
+	return rows, nil
+}
+
+// ParseSEP parses a SHARADAR/SEP (Sharadar Equity Prices) response into DailyRow.
+// SEP columns: ticker, date, open, high, low, close, volume, closeadj, closeunadj, lastupdated
+// - closeadj = adjusted for splits AND dividends (use for backtesting total returns)
+// - closeunadj = raw historical price as traded
+// - close = split-adjusted only (not dividend adjusted)
+func ParseSEP(resp *Response) ([]DailyRow, error) {
+	idx := buildColumnIndex(resp.Datatable.Columns)
+	rows := make([]DailyRow, 0, len(resp.Datatable.Data))
+
+	// Debug: log column names
+	if len(resp.Datatable.Data) > 0 {
+		colNames := make([]string, 0, len(resp.Datatable.Columns))
+		for _, col := range resp.Datatable.Columns {
+			colNames = append(colNames, col.Name)
+		}
+		log.Printf("SEP columns: %v", colNames)
+	}
+
+	for i, row := range resp.Datatable.Data {
+		date := getTime(row, idx, "date")
+		if date == nil {
+			continue
+		}
+
+		// Map SEP columns to DailyRow:
+		// - closeadj → Close (adjusted for splits + dividends, for accurate backtesting)
+		// - closeunadj → CloseUnadj (raw historical price)
+		dr := DailyRow{
+			Ticker:      getString(row, idx, "ticker"),
+			Date:        *date,
+			Open:        getDecimal(row, idx, "open"),
+			High:        getDecimal(row, idx, "high"),
+			Low:         getDecimal(row, idx, "low"),
+			Close:       getDecimal(row, idx, "closeadj"),  // Use adjusted close for backtesting
+			CloseUnadj:  getDecimal(row, idx, "closeunadj"),
+			Volume:      getInt64(row, idx, "volume"),
+			LastUpdated: getTime(row, idx, "lastupdated"),
+		}
+
+		// Debug: log first parsed row
+		if i == 0 {
+			log.Printf("SEP first parsed row: Ticker=%s Date=%s Close(adj)=%v CloseUnadj=%v",
+				dr.Ticker, dr.Date.Format("2006-01-02"), dr.Close, dr.CloseUnadj)
+		}
+
+		if dr.Ticker != "" {
+			rows = append(rows, dr)
+		}
+	}
+
+	log.Printf("Parsed %d SEP price rows", len(rows))
 	return rows, nil
 }

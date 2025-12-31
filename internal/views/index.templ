@@ -1,52 +1,358 @@
 package views
 
+import "fmt"
+
+// DashboardData contains data for the dashboard view
+type DashboardData struct {
+	// Data status
+	CompanyCount    int
+	MetricCount     int
+	PriceCount      int
+	LastMetricDate  string
+	LastPriceDate   string
+
+	// Strategy summary
+	StrategyCount   int
+	TotalRuns       int
+
+	// Recent runs (strategy name, run date, matches)
+	RecentRuns      []RecentRun
+}
+
+type RecentRun struct {
+	StrategyID   int
+	StrategyName string
+	RunDate      string
+	Matches      int
+}
+
 templ Index() {
 	@Layout("Dashboard") {
-		<div class="space-y-8">
-			<section class="card bg-base-200">
-				<div class="card-body">
-					<h2 class="card-title text-primary">Portfolio Summary</h2>
-					<p class="text-base-content/70">No holdings yet. Run an analysis to get started.</p>
-					<div id="portfolio-table" class="mt-4">
-						<!-- Portfolio data will be loaded here -->
+		<div class="space-y-4 sm:space-y-6">
+			<!-- Quick Stats -->
+			<div class="stats stats-vertical sm:stats-horizontal shadow w-full bg-base-200">
+				<div class="stat">
+					<div class="stat-figure text-primary hidden sm:block">
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"/>
+						</svg>
 					</div>
+					<div class="stat-title text-xs sm:text-sm">Companies</div>
+					<div
+						class="stat-value text-primary text-xl sm:text-2xl"
+						id="company-count"
+					>
+						<span class="loading loading-spinner loading-sm"></span>
+					</div>
+					<div class="stat-desc text-xs">Tracked in database</div>
 				</div>
-			</section>
+				<div class="stat">
+					<div class="stat-figure text-secondary hidden sm:block">
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"/>
+						</svg>
+					</div>
+					<div class="stat-title text-xs sm:text-sm">Metrics</div>
+					<div class="stat-value text-secondary text-xl sm:text-2xl" id="metric-count">
+						<span class="loading loading-spinner loading-sm"></span>
+					</div>
+					<div class="stat-desc text-xs">Quarterly data points</div>
+				</div>
+				<div class="stat">
+					<div class="stat-figure text-accent hidden sm:block">
+						<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"/>
+						</svg>
+					</div>
+					<div class="stat-title text-xs sm:text-sm">Prices</div>
+					<div class="stat-value text-accent text-xl sm:text-2xl" id="price-count">
+						<span class="loading loading-spinner loading-sm"></span>
+					</div>
+					<div class="stat-desc text-xs">Historical prices</div>
+				</div>
+			</div>
 
-			<section class="card bg-base-200">
-				<div class="card-body">
-					<h2 class="card-title text-primary">Run Analysis</h2>
-					<div class="flex gap-4 items-end flex-wrap">
-						<div class="form-control">
-							<label class="label">
-								<span class="label-text">Strategy</span>
-							</label>
-							<select class="select select-bordered">
-								<option>Magic Formula</option>
-								<option>Dividend Yield</option>
-							</select>
+			<!-- Stats container for HTMX updates -->
+			<div id="stats-container" class="hidden"></div>
+
+			<!-- Main Grid -->
+			<div class="grid grid-cols-1 lg:grid-cols-2 gap-4 sm:gap-6">
+				<!-- Strategies Card -->
+				<div class="card bg-base-200">
+					<div class="card-body p-4 sm:p-6">
+						<div class="flex items-center justify-between gap-2">
+							<h2 class="font-semibold text-base sm:text-lg">Strategies</h2>
+							<a href="/strategies/new" class="btn btn-sm btn-primary">New</a>
 						</div>
-						<button
-							class="btn btn-primary"
-							hx-post="/analyze"
-							hx-target="#results-area"
-							hx-indicator="#loading"
+						<p class="text-base-content/70 text-xs sm:text-sm">Manage stock screening strategies.</p>
+						<div
+							hx-get="/api/dashboard/strategies"
+							hx-trigger="load"
+							hx-target="this"
+							class="mt-3"
 						>
-							Run Analysis
-						</button>
-						<span id="loading" class="htmx-indicator loading loading-spinner loading-sm"></span>
+							<span class="loading loading-spinner loading-sm"></span>
+							<span class="text-sm">Loading...</span>
+						</div>
 					</div>
 				</div>
-			</section>
 
-			<section class="card bg-base-200">
-				<div class="card-body">
-					<h2 class="card-title text-primary">Results</h2>
-					<div id="results-area" class="text-base-content/70">
-						<p>Run an analysis to see recommendations.</p>
+				<!-- Recent Runs Card -->
+				<div class="card bg-base-200">
+					<div class="card-body p-4 sm:p-6">
+						<h2 class="font-semibold text-base sm:text-lg">Recent Runs</h2>
+						<div
+							hx-get="/api/dashboard/runs"
+							hx-trigger="load"
+							hx-target="this"
+							class="mt-3"
+						>
+							<span class="loading loading-spinner loading-sm"></span>
+							<span class="text-sm">Loading...</span>
+						</div>
 					</div>
 				</div>
-			</section>
+
+				<!-- Data Ingestion Card -->
+				<div class="card bg-base-200">
+					<div class="card-body p-4 sm:p-6">
+						<h2 class="font-semibold text-base sm:text-lg">Data Ingestion</h2>
+						<p class="text-base-content/70 text-xs sm:text-sm">Load fundamentals and prices from Sharadar.</p>
+
+						<!-- Last Update Info -->
+						<div id="data-status" class="text-xs space-y-1 mt-2">
+							<div class="flex justify-between">
+								<span class="text-base-content/60">Fundamentals:</span>
+								<span id="last-metric-update" class="font-mono">...</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-base-content/60">Prices:</span>
+								<span id="last-price-update" class="font-mono">...</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-base-content/60">Benchmark:</span>
+								<span id="last-benchmark-update" class="font-mono">...</span>
+							</div>
+							<div class="flex justify-between">
+								<span class="text-base-content/60">S&P 500 Members:</span>
+								<span id="sp500-count" class="font-mono">...</span>
+							</div>
+						</div>
+
+						<div id="ingest-buttons" class="flex flex-wrap gap-2 mt-3">
+							<button
+								class="btn btn-sm btn-outline"
+								hx-post="/admin/ingest/tickers"
+								hx-target="#ingest-result"
+								hx-indicator="#ingest-loading"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button"
+							>
+								Companies
+							</button>
+							<button
+								class="btn btn-sm btn-outline"
+								hx-post="/admin/ingest/fundamentals"
+								hx-target="#ingest-result"
+								hx-indicator="#ingest-loading"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button"
+								title="Incremental update (recent data only)"
+							>
+								Fundamentals
+							</button>
+							<button
+								class="btn btn-sm btn-warning btn-outline"
+								hx-post="/admin/ingest/fundamentals?full=true"
+								hx-target="#ingest-result"
+								hx-indicator="#ingest-loading"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button"
+								hx-confirm="Full refresh will fetch ALL historical data for all dimensions. This may take several minutes. Continue?"
+								title="Full refresh - fetch all historical data including ARY annual data"
+							>
+								Full Refresh
+							</button>
+							<button
+								class="btn btn-sm btn-outline"
+								hx-post="/admin/ingest/sp500"
+								hx-target="#ingest-result"
+								hx-indicator="#ingest-loading"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button"
+								title="Load S&P 500 membership history for backtesting"
+							>
+								S&P 500
+							</button>
+							<span id="ingest-loading" class="htmx-indicator loading loading-spinner loading-sm"></span>
+						</div>
+
+						<!-- Tiingo Price Data (rate limited) -->
+						<div class="divider text-xs my-2">Tiingo Prices (50/hour limit)</div>
+						<div id="tiingo-buttons" class="flex flex-wrap gap-2">
+							<button
+								class="btn btn-sm btn-outline btn-secondary"
+								hx-post="/admin/ingest/benchmark"
+								hx-target="#ingest-result"
+								hx-indicator="#ingest-loading"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button"
+								title="Fetch SPY benchmark prices from Tiingo"
+							>
+								Benchmark (SPY)
+							</button>
+							<button
+								class="btn btn-sm btn-outline btn-secondary"
+								hx-post="/admin/ingest/prices?limit=10"
+								hx-target="#ingest-result"
+								hx-indicator="#ingest-loading"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button"
+								title="Fetch daily prices for 10 stocks (uses rate limit)"
+							>
+								Prices (10)
+							</button>
+							<button
+								class="btn btn-sm btn-outline btn-secondary"
+								hx-post="/admin/ingest/prices?limit=25"
+								hx-target="#ingest-result"
+								hx-indicator="#ingest-loading"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button"
+								title="Fetch daily prices for 25 stocks (uses rate limit)"
+							>
+								Prices (25)
+							</button>
+						</div>
+						<div id="ingest-result" class="mt-2 text-xs sm:text-sm"></div>
+					</div>
+				</div>
+
+				<!-- Data Sources Card -->
+				<div class="card bg-base-200">
+					<div class="card-body p-4 sm:p-6">
+						<h2 class="font-semibold text-base sm:text-lg">Price Data Sources</h2>
+						<div class="mt-2 space-y-2 text-xs sm:text-sm">
+							<div class="flex items-center gap-2">
+								<span class="badge badge-xs badge-primary">SEP</span>
+								<span class="text-base-content/70">Nasdaq - Equity prices (adjusted)</span>
+							</div>
+							<div class="flex items-center gap-2">
+								<span class="badge badge-xs badge-secondary">Tiingo</span>
+								<span class="text-base-content/70">ETF benchmarks (SPY, QQQ)</span>
+							</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- Script to load stats -->
+		<script>
+			document.addEventListener('DOMContentLoaded', function() {
+				// Load ingest status
+				fetch('/admin/ingest/status')
+					.then(r => r.json())
+					.then(data => {
+						document.getElementById('company-count').textContent = data.companies?.toLocaleString() || '0';
+						document.getElementById('metric-count').textContent = data.metrics?.toLocaleString() || '0';
+						document.getElementById('price-count').textContent = data.prices?.toLocaleString() || '0';
+
+						// Update last update dates
+						const metricUpdateEl = document.getElementById('last-metric-update');
+						if (metricUpdateEl) {
+							metricUpdateEl.textContent = data.last_metric_update || 'Never';
+						}
+						const priceUpdateEl = document.getElementById('last-price-update');
+						if (priceUpdateEl) {
+							priceUpdateEl.textContent = data.last_price_update || 'Never';
+						}
+						const benchmarkUpdateEl = document.getElementById('last-benchmark-update');
+						if (benchmarkUpdateEl) {
+							benchmarkUpdateEl.textContent = data.last_benchmark_update || 'Never';
+						}
+
+						// Update S&P 500 count
+						const sp500El = document.getElementById('sp500-count');
+						if (sp500El) {
+							sp500El.textContent = data.sp500_membership?.toLocaleString() || '0';
+						}
+					})
+					.catch(() => {
+						document.getElementById('company-count').textContent = '-';
+						document.getElementById('metric-count').textContent = '-';
+						document.getElementById('price-count').textContent = '-';
+						document.getElementById('last-metric-update').textContent = '-';
+						document.getElementById('last-price-update').textContent = '-';
+						document.getElementById('last-benchmark-update').textContent = '-';
+						document.getElementById('sp500-count').textContent = '-';
+					});
+
+			});
+		</script>
+	}
+}
+
+templ DashboardStrategies(strategies []DashboardStrategy) {
+	if len(strategies) == 0 {
+		<p class="text-base-content/50 text-sm">No strategies yet. Create your first one!</p>
+	} else {
+		<div class="space-y-2">
+			for _, s := range strategies {
+				<a
+					href={ templ.SafeURL(fmt.Sprintf("/strategies/%d", s.ID)) }
+					class="flex items-center justify-between p-2 bg-base-100 rounded-lg hover:bg-base-300 transition-colors"
+				>
+					<div class="flex items-center gap-2">
+						<span class="font-medium">{ s.Name }</span>
+						if s.IsDefault {
+							<span class="badge badge-xs badge-primary">Default</span>
+						}
+					</div>
+					<span class="text-sm text-base-content/50">{ fmt.Sprintf("%d runs", s.RunCount) }</span>
+				</a>
+			}
+			<a href="/strategies" class="btn btn-ghost btn-sm btn-block mt-2">View All</a>
 		</div>
 	}
+}
+
+type DashboardStrategy struct {
+	ID        int
+	Name      string
+	IsDefault bool
+	RunCount  int
+}
+
+templ DashboardRuns(runs []DashboardRun) {
+	if len(runs) == 0 {
+		<p class="text-base-content/50 text-sm">No runs yet. Execute a strategy to see results here.</p>
+	} else {
+		<div class="overflow-x-auto">
+			<table class="table table-sm">
+				<thead>
+					<tr>
+						<th>Strategy</th>
+						<th>Date</th>
+						<th>Matches</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, r := range runs {
+						<tr>
+							<td>
+								<a href={ templ.SafeURL(fmt.Sprintf("/strategies/%d", r.StrategyID)) } class="link link-hover">
+									{ r.StrategyName }
+								</a>
+							</td>
+							<td class="text-sm text-base-content/70">{ r.RunDate }</td>
+							<td>
+								<span class="badge badge-sm badge-primary">{ fmt.Sprintf("%d", r.Matches) }</span>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+	}
+}
+
+type DashboardRun struct {
+	StrategyID   int
+	StrategyName string
+	RunDate      string
+	Matches      int
 }

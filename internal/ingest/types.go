@@ -58,6 +58,11 @@ type SF1Row struct {
 	EV              *decimal.Decimal
 	Price           *decimal.Decimal
 	ReportPeriod    *time.Time
+
+	// Additional fields for ROE calculation
+	Assets      *decimal.Decimal // Total assets
+	Equity      *decimal.Decimal // Shareholders' equity
+	GrossProfit *decimal.Decimal // Gross profit (gp)
 }
 
 // DailyRow represents a row from SHARADAR/DAILY table (daily prices).

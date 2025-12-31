@@ -1,0 +1,389 @@
+package views
+
+import "github.com/mauv0809/crispy-broccoli/internal/strategy"
+import "fmt"
+
+templ BacktestResults(result strategy.BacktestResult) {
+	<div class="space-y-6">
+		<!-- Performance Chart -->
+		if len(result.PortfolioCurve) > 1 {
+			<div class="card bg-base-100">
+				<div class="card-body">
+					<div class="flex items-center justify-between mb-2">
+						<h3 class="card-title text-lg">Performance</h3>
+						<select id="chart-granularity" class="select select-sm select-bordered">
+							<option value="daily">Daily</option>
+							<option value="weekly">Weekly</option>
+							<option value="monthly" selected>Monthly</option>
+							<option value="quarterly">Quarterly</option>
+						</select>
+					</div>
+					<div class="h-64 sm:h-80">
+						<canvas
+							id="performance-chart"
+							data-portfolio={ portfolioCurveJSON(result.PortfolioCurve) }
+							data-benchmark={ benchmarkCurveJSON(result.BenchmarkCurve) }
+						></canvas>
+					</div>
+				</div>
+			</div>
+			@performanceChartScript()
+		}
+
+		<!-- Summary Stats -->
+		<div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+			<div class="stat bg-base-100 rounded-lg">
+				<div class="stat-title">Portfolio Return</div>
+				<div class={ "stat-value text-2xl", templ.KV("text-success", result.TotalReturn > 0), templ.KV("text-error", result.TotalReturn < 0) }>
+					{ fmt.Sprintf("%.1f%%", result.TotalReturn) }
+				</div>
+				<div class="stat-desc">{ fmt.Sprintf("%.1f%% annualized", result.AnnualizedReturn) }</div>
+			</div>
+			<div class="stat bg-base-100 rounded-lg">
+				<div class="stat-title">Benchmark (SPY)</div>
+				<div class={ "stat-value text-2xl", templ.KV("text-success", result.BenchmarkReturn > 0), templ.KV("text-error", result.BenchmarkReturn < 0) }>
+					{ fmt.Sprintf("%.1f%%", result.BenchmarkReturn) }
+				</div>
+				<div class="stat-desc">{ fmt.Sprintf("%.1f%% annualized", result.BenchmarkAnnualized) }</div>
+			</div>
+			<div class="stat bg-base-100 rounded-lg">
+				<div class="stat-title">Alpha</div>
+				<div class={ "stat-value text-2xl", templ.KV("text-success", result.Alpha > 0), templ.KV("text-error", result.Alpha < 0) }>
+					{ fmt.Sprintf("%+.1f%%", result.Alpha) }
+				</div>
+				<div class="stat-desc">vs benchmark</div>
+			</div>
+			<div class="stat bg-base-100 rounded-lg">
+				<div class="stat-title">Max Drawdown</div>
+				<div class="stat-value text-2xl text-warning">
+					{ fmt.Sprintf("%.1f%%", result.MaxDrawdown) }
+				</div>
+				<div class="stat-desc">peak to trough</div>
+			</div>
+		</div>
+
+		<!-- Rebalance Periods -->
+		<div class="card bg-base-200">
+			<div class="card-body">
+				<h3 class="card-title text-lg">Rebalancing Periods ({ fmt.Sprintf("%d periods", len(result.Periods)) })</h3>
+				<div class="overflow-x-auto max-h-96">
+					<table class="table table-sm table-zebra">
+						<thead class="sticky top-0 bg-base-200">
+							<tr>
+								<th>Period</th>
+								<th>Holdings</th>
+								<th>Return</th>
+								<th>Cumulative</th>
+							</tr>
+						</thead>
+						<tbody>
+							for _, period := range result.Periods {
+								<tr>
+									<td class="whitespace-nowrap">
+										{ period.StartDate.Format("Jan 2006") } - { period.EndDate.Format("Jan 2006") }
+									</td>
+									<td>
+										<div class="flex flex-wrap gap-1">
+											for _, h := range period.Holdings {
+												if h.IsFallback {
+													<span class="badge badge-sm badge-outline badge-warning" title="Fallback pick (didn't pass all filters)">{ h.Ticker }*</span>
+												} else {
+													<span class="badge badge-sm badge-outline">{ h.Ticker }</span>
+												}
+											}
+										</div>
+									</td>
+									<td class={ templ.KV("text-success", period.PeriodReturn > 0), templ.KV("text-error", period.PeriodReturn < 0) }>
+										{ fmt.Sprintf("%+.1f%%", period.PeriodReturn*100) }
+									</td>
+									<td>
+										{ fmt.Sprintf("$%.0f", period.CumulativeVal) }
+									</td>
+								</tr>
+							}
+						</tbody>
+					</table>
+				</div>
+			</div>
+		</div>
+
+		<!-- Period Details (expandable) -->
+		if len(result.Periods) > 0 {
+			<div class="collapse collapse-arrow bg-base-200">
+				<input type="checkbox"/>
+				<div class="collapse-title font-medium">
+					View Holding Details
+				</div>
+				<div class="collapse-content">
+					<div class="space-y-4">
+						for i, period := range result.Periods {
+							<div class="card bg-base-100">
+								<div class="card-body py-3">
+									<h4 class="font-medium text-sm">
+										Period { fmt.Sprintf("%d", i+1) }: { period.StartDate.Format("Jan 2, 2006") } - { period.EndDate.Format("Jan 2, 2006") }
+										<span class={ "ml-2", templ.KV("text-success", period.PeriodReturn > 0), templ.KV("text-error", period.PeriodReturn < 0) }>
+											({ fmt.Sprintf("%+.1f%%", period.PeriodReturn*100) })
+										</span>
+									</h4>
+									<div class="overflow-x-auto">
+										<table class="table table-xs">
+											<thead>
+												<tr>
+													<th>Rank</th>
+													<th>Ticker</th>
+													<th>Weight</th>
+													<th>Entry</th>
+													<th>Exit</th>
+													<th>Return</th>
+												</tr>
+											</thead>
+											<tbody>
+												for _, h := range period.Holdings {
+													<tr class={ templ.KV("bg-warning/10", h.IsFallback) }>
+														<td>
+															{ fmt.Sprintf("#%d", h.Rank) }
+															if h.IsFallback {
+																<span class="badge badge-xs badge-warning ml-1" title="Fallback">F</span>
+															}
+														</td>
+														<td class="font-mono">{ h.Ticker }</td>
+														<td>{ fmt.Sprintf("%.0f%%", h.Weight*100) }</td>
+														<td>${ fmt.Sprintf("%.2f", h.EntryPrice) }</td>
+														<td>${ fmt.Sprintf("%.2f", h.ExitPrice) }</td>
+														<td class={ templ.KV("text-success", h.Return > 0), templ.KV("text-error", h.Return < 0) }>
+															{ fmt.Sprintf("%+.1f%%", h.Return*100) }
+														</td>
+													</tr>
+												}
+											</tbody>
+										</table>
+									</div>
+								</div>
+							</div>
+						}
+					</div>
+				</div>
+			</div>
+		}
+
+		<!-- Execution Info -->
+		<div class="text-xs text-base-content/50 text-right">
+			Backtest completed in { fmt.Sprintf("%dms", result.ExecutionTimeMs) }
+			| { result.Config.StartDate.Format("Jan 2, 2006") } - { result.Config.EndDate.Format("Jan 2, 2006") }
+			| { result.Config.RebalanceFreq } rebalancing
+		</div>
+	</div>
+}
+
+// portfolioCurveJSON converts curve points to JSON for the chart
+func portfolioCurveJSON(curve []strategy.CurvePoint) string {
+	if len(curve) == 0 {
+		return "[]"
+	}
+	result := "["
+	for i, p := range curve {
+		if i > 0 {
+			result += ","
+		}
+		result += fmt.Sprintf(`{"x":"%s","y":%.4f}`, p.Date.Format("2006-01-02"), p.Value)
+	}
+	result += "]"
+	return result
+}
+
+// benchmarkCurveJSON converts benchmark curve points to JSON
+func benchmarkCurveJSON(curve []strategy.CurvePoint) string {
+	if len(curve) == 0 {
+		return "[]"
+	}
+	result := "["
+	for i, p := range curve {
+		if i > 0 {
+			result += ","
+		}
+		result += fmt.Sprintf(`{"x":"%s","y":%.4f}`, p.Date.Format("2006-01-02"), p.Value)
+	}
+	result += "]"
+	return result
+}
+
+templ performanceChartScript() {
+	<script>
+		(function() {
+			const canvas = document.getElementById('performance-chart');
+			const granularitySelect = document.getElementById('chart-granularity');
+			if (!canvas || !window.Chart) return;
+
+			const rawPortfolioData = JSON.parse(canvas.dataset.portfolio || '[]');
+			const rawBenchmarkData = JSON.parse(canvas.dataset.benchmark || '[]');
+
+			// Sort data by date to ensure chronological order
+			function sortByDate(data) {
+				if (!data || data.length === 0) return data;
+				return [...data].sort((a, b) => new Date(a.x) - new Date(b.x));
+			}
+
+			// Downsample data based on granularity
+			function downsample(data, granularity) {
+				if (!data || data.length === 0) return data;
+
+				// First sort the data chronologically
+				const sorted = sortByDate(data);
+
+				if (granularity === 'daily') return sorted;
+
+				const result = [];
+				let lastKey = null;
+
+				for (const point of sorted) {
+					const date = new Date(point.x);
+					let key;
+
+					switch (granularity) {
+						case 'weekly':
+							// ISO week calculation
+							const thursday = new Date(date);
+							thursday.setDate(date.getDate() + (4 - (date.getDay() || 7)));
+							const yearStart = new Date(thursday.getFullYear(), 0, 1);
+							const week = Math.ceil((((thursday - yearStart) / 86400000) + 1) / 7);
+							key = thursday.getFullYear() + '-W' + week.toString().padStart(2, '0');
+							break;
+						case 'monthly':
+							key = date.getFullYear() + '-' + (date.getMonth() + 1).toString().padStart(2, '0');
+							break;
+						case 'quarterly':
+							const quarter = Math.floor(date.getMonth() / 3) + 1;
+							key = date.getFullYear() + '-Q' + quarter;
+							break;
+						default:
+							key = point.x;
+					}
+
+					if (key !== lastKey) {
+						result.push(point);
+						lastKey = key;
+					}
+				}
+
+				return result;
+			}
+
+			// Get time unit based on granularity
+			function getTimeUnit(granularity) {
+				switch (granularity) {
+					case 'daily': return 'day';
+					case 'weekly': return 'week';
+					case 'monthly': return 'month';
+					case 'quarterly': return 'quarter';
+					default: return 'month';
+				}
+			}
+
+			let chart = null;
+
+			function createChart(granularity) {
+				const portfolioData = downsample(rawPortfolioData, granularity);
+				const benchmarkData = downsample(rawBenchmarkData, granularity);
+
+				const pointRadius = granularity === 'daily' ? 0 : 3;
+				const timeUnit = getTimeUnit(granularity);
+
+				if (chart) {
+					chart.destroy();
+				}
+
+				const ctx = canvas.getContext('2d');
+				chart = new Chart(ctx, {
+					type: 'line',
+					data: {
+						datasets: [
+							{
+								label: 'Portfolio',
+								data: portfolioData,
+								borderColor: '#6419e6',
+								backgroundColor: 'rgba(100, 25, 230, 0.1)',
+								borderWidth: 2,
+								fill: true,
+								tension: 0.1,
+								pointRadius: pointRadius,
+								pointHoverRadius: 5
+							},
+							{
+								label: 'SPY Benchmark',
+								data: benchmarkData,
+								borderColor: '#d926a9',
+								backgroundColor: 'transparent',
+								borderWidth: 2,
+								borderDash: [5, 5],
+								fill: false,
+								tension: 0.1,
+								pointRadius: 0
+							}
+						]
+					},
+					options: {
+						responsive: true,
+						maintainAspectRatio: false,
+						interaction: {
+							intersect: false,
+							mode: 'index'
+						},
+						scales: {
+							x: {
+								type: 'time',
+								time: {
+									unit: timeUnit,
+									displayFormats: {
+										day: 'MMM d, yyyy',
+										week: 'MMM d, yyyy',
+										month: 'MMM yyyy',
+										quarter: 'QQQ yyyy'
+									},
+									tooltipFormat: 'MMM d, yyyy'
+								},
+								grid: { color: 'rgba(255,255,255,0.1)' },
+								ticks: {
+									color: 'rgba(255,255,255,0.7)',
+									maxTicksLimit: 12,
+									autoSkip: true
+								}
+							},
+							y: {
+								grid: { color: 'rgba(255,255,255,0.1)' },
+								ticks: {
+									color: 'rgba(255,255,255,0.7)',
+									callback: function(value) {
+										return ((value - 1) * 100).toFixed(0) + '%';
+									}
+								}
+							}
+						},
+						plugins: {
+							legend: {
+								labels: { color: 'rgba(255,255,255,0.9)' }
+							},
+							tooltip: {
+								callbacks: {
+									label: function(context) {
+										const pct = ((context.parsed.y - 1) * 100).toFixed(1);
+										return context.dataset.label + ': ' + (pct >= 0 ? '+' : '') + pct + '%';
+									}
+								}
+							}
+						}
+					}
+				});
+			}
+
+			// Initial chart
+			createChart(granularitySelect ? granularitySelect.value : 'monthly');
+
+			// Listen for granularity changes
+			if (granularitySelect) {
+				granularitySelect.addEventListener('change', function() {
+					createChart(this.value);
+				});
+			}
+		})();
+	</script>
+}
