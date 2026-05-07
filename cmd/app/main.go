@@ -115,14 +115,6 @@ func main() {
 		return
 	}
 
-	if email := os.Getenv("INITIAL_ADMIN_EMAIL"); email != "" {
-		if _, err := usersRepo.Upsert(ctx, email, "", true); err != nil {
-			slog.Error("initial admin upsert failed", "error", err)
-			os.Exit(1)
-		}
-		slog.Info("initial admin ensured", "email", email)
-	}
-
 	// Sessions: scs uses database/sql, not pgx. Open a small companion pool.
 	sqlDB, err := sql.Open("pgx", databaseURL)
 	if err != nil {

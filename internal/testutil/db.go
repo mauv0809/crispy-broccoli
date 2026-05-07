@@ -33,12 +33,25 @@ func OpenTestDB(t *testing.T) *pgxpool.Pool {
 	}
 	t.Cleanup(pool.Close)
 
-	// Wipe auth-related tables. Don't touch reference data (companies,
-	// financial_metrics) — slow to repopulate and not what these tests touch.
+	// Wipe auth-related tables. CASCADE also clears strategies/strategy_runs/
+	// portfolio because their created_by FK references users(id). Reference
+	// data (companies, financial_metrics) is left intact — slow to repopulate
+	// and not what these tests touch.
 	_, err = pool.Exec(context.Background(),
 		`TRUNCATE auth_identities, sessions, users RESTART IDENTITY CASCADE`)
 	if err != nil {
 		t.Fatalf("truncate: %v", err)
+	}
+
+	// Re-insert the synthetic system user that migration 015 normally
+	// guarantees. Default-strategy seeding and any code path that targets
+	// the system user via SELECT ... WHERE email='system@deepvalue.local'
+	// depends on this row existing.
+	_, err = pool.Exec(context.Background(),
+		`INSERT INTO users (email, name, is_admin, is_active)
+		 VALUES ('system@deepvalue.local', 'System', FALSE, FALSE)`)
+	if err != nil {
+		t.Fatalf("re-insert system user: %v", err)
 	}
 	return pool
 }

@@ -30,16 +30,11 @@ func NewStrategyHandler(repo *strategy.Repository, executor *strategy.Executor, 
 	}
 }
 
-// currentUserID returns the authenticated user's ID as a pointer suitable
-// for nullable created_by columns. Returns nil if no user is on context
-// (should not happen behind RequireAuth, but defensive — the column is
-// nullable so a nil insert is fine).
-func currentUserID(c echo.Context) *int64 {
-	if u := auth.UserFromContext(c); u != nil {
-		id := u.ID
-		return &id
-	}
-	return nil
+// currentUserID returns the authenticated user's ID. Nil-derefs (and
+// 500s via Recover) if no user is on context — that signals a write
+// handler that wasn't wrapped in RequireAuth, which is a programming bug.
+func currentUserID(c echo.Context) int64 {
+	return auth.UserFromContext(c).ID
 }
 
 // ListStrategies returns all strategies
