@@ -1,10 +1,10 @@
 module github.com/mauv0809/crispy-broccoli
 
-go 1.25.0
+go 1.24.4
 
 require (
 	github.com/a-h/templ v0.3.960
-	github.com/getsentry/sentry-go v0.46.2
+	github.com/getsentry/sentry-go v0.45.1
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.14.0
