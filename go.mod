@@ -4,13 +4,10 @@ go 1.24.4
 
 require (
 	github.com/a-h/templ v0.3.960
-	github.com/alexedwards/scs/postgresstore v0.0.0-20251002162104-209de6e426de
-	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/getsentry/sentry-go v0.45.1
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/joho/godotenv v1.5.1
 	github.com/labstack/echo/v4 v4.14.0
-	github.com/markbates/goth v1.82.0
 	github.com/pressly/goose/v3 v3.26.0
 	github.com/shopspring/decimal v1.4.0
 	github.com/swaggo/swag v1.16.6
