@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	"log"
+	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
@@ -15,6 +15,7 @@ import (
 	"github.com/mauv0809/crispy-broccoli/internal/db"
 	"github.com/mauv0809/crispy-broccoli/internal/handlers"
 	"github.com/mauv0809/crispy-broccoli/internal/ingest"
+	"github.com/mauv0809/crispy-broccoli/internal/observability"
 	"github.com/mauv0809/crispy-broccoli/internal/strategy"
 
 	"github.com/mauv0809/crispy-broccoli/docs"
@@ -34,9 +35,19 @@ var (
 // @BasePath /
 
 func main() {
+	env := os.Getenv("ENV")
+	if env == "" {
+		env = "development"
+	}
+	logger := observability.NewLogger(observability.Config{
+		Env:   env,
+		Level: observability.ParseLevel(os.Getenv("LOG_LEVEL")),
+	})
+	slog.SetDefault(logger)
+
 	// Load .env file if it exists (local dev)
 	if err := godotenv.Load(); err != nil {
-		log.Println("No .env file found, using environment variables")
+		slog.Info("no .env file found, using environment variables")
 	}
 
 	ctx := context.Background()
@@ -44,40 +55,33 @@ func main() {
 	// Get database URL
 	databaseURL := os.Getenv("DATABASE_URL")
 	if databaseURL == "" {
-		log.Fatal("DATABASE_URL environment variable is required")
+		slog.Error("DATABASE_URL environment variable is required")
+		os.Exit(1)
 	}
 
 	// Run migrations. Fail fast on error: an HTTP server with a broken
 	// or stale schema is worse than a restart loop.
 	if err := db.RunMigrations(databaseURL); err != nil {
-		log.Fatalf("migrations failed: %v", err)
+		slog.Error("migrations failed", "error", err)
+		os.Exit(1)
 	}
-	log.Println("Migrations completed")
+	slog.Info("migrations completed")
 
 	// Connect to database. Fail fast: same reasoning as migrations.
 	pool, err := db.Connect(ctx, databaseURL)
 	if err != nil {
-		log.Fatalf("database connect failed: %v", err)
+		slog.Error("database connect failed", "error", err)
+		os.Exit(1)
 	}
 	defer pool.Close()
-	log.Println("Connected to database")
+	slog.Info("database connected")
 
 	// Setup Echo
 	e := echo.New()
-	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		LogStatus:   true,
-		LogURI:      true,
-		LogError:    true,
-		HandleError: true,
-		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
-			if v.Error == nil {
-				log.Printf("%d %s", v.Status, v.URI)
-			} else {
-				log.Printf("%d %s - %v", v.Status, v.URI, v.Error)
-			}
-			return nil
-		},
-	}))
+	e.HideBanner = true
+	e.HidePort = true
+	e.Use(observability.RequestIDMiddleware())
+	e.Use(observability.RequestLoggerMiddleware(logger))
 	e.Use(middleware.Recover())
 
 	// Setup handlers
@@ -94,9 +98,9 @@ func main() {
 	nasdaqAPIKey := os.Getenv("NASDAQ_API_KEY")
 	if nasdaqAPIKey != "" {
 		nasdaqClient = ingest.NewClient(nasdaqAPIKey)
-		log.Println("Nasdaq Data Link client initialized (SEP for equity prices)")
+		slog.Info("nasdaq client initialized")
 	} else {
-		log.Println("Warning: NASDAQ_API_KEY not set, Nasdaq data endpoints disabled")
+		slog.Warn("NASDAQ_API_KEY not set; nasdaq endpoints disabled")
 	}
 
 	// Setup Tiingo client (for ETF benchmark prices - SPY, QQQ, etc.)
@@ -104,9 +108,9 @@ func main() {
 	tiingoAPIKey := os.Getenv("TIINGO_API_KEY")
 	if tiingoAPIKey != "" {
 		tiingoClient = ingest.NewTiingoClient(tiingoAPIKey)
-		log.Println("Tiingo client initialized (for ETF benchmarks and stock prices)")
+		slog.Info("tiingo client initialized")
 	} else {
-		log.Println("Warning: TIINGO_API_KEY not set, ETF benchmark comparison disabled")
+		slog.Warn("TIINGO_API_KEY not set; benchmark comparison disabled")
 	}
 
 	// Setup ingest handler (needs both clients)
@@ -119,11 +123,11 @@ func main() {
 	strategyExecutor := strategy.NewExecutor(pool)
 	backtester := strategy.NewBacktester(strategyExecutor, repo, nasdaqClient, tiingoClient)
 	strategyHandler = handlers.NewStrategyHandler(strategyRepo, strategyExecutor, backtester)
-	log.Println("Strategy engine initialized")
+	slog.Info("strategy engine initialized")
 
 	// Seed default strategies
 	if err := strategy.SeedDefaultStrategies(ctx, pool); err != nil {
-		log.Printf("Warning: failed to seed default strategies: %v", err)
+		slog.Warn("failed to seed default strategies", "error", err)
 	}
 
 	// Static files
@@ -165,7 +169,7 @@ func main() {
 		// Dashboard API (returns HTML fragments for HTMX)
 		api.GET("/dashboard/strategies", strategyHandler.DashboardStrategies)
 		api.GET("/dashboard/runs", strategyHandler.DashboardRuns)
-		log.Println("Strategy endpoints registered")
+		slog.Info("strategy endpoints registered")
 	}
 
 	// Admin routes for data ingestion (Sharadar - fundamentals only)
@@ -177,7 +181,7 @@ func main() {
 		admin.POST("/ingest/sp500", ingestHandler.IngestSP500)
 		admin.POST("/ingest/benchmark", ingestHandler.IngestBenchmark)
 		admin.POST("/ingest/prices", ingestHandler.IngestPrices)
-		log.Println("Ingestion endpoints registered")
+		slog.Info("ingestion endpoints registered")
 	}
 
 	// Start server
@@ -188,9 +192,10 @@ func main() {
 
 	// Start server in a goroutine so we can listen for shutdown signals.
 	go func() {
-		log.Printf("Starting server on :%s", port)
+		slog.Info("starting server", "port", port)
 		if err := e.Start(":" + port); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("server error: %v", err)
+			slog.Error("server error", "error", err)
+			os.Exit(1)
 		}
 	}()
 
@@ -198,12 +203,12 @@ func main() {
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
-	log.Println("shutdown signal received, draining...")
+	slog.Info("shutdown signal received; draining")
 
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := e.Shutdown(shutdownCtx); err != nil {
-		log.Printf("graceful shutdown error: %v", err)
+		slog.Error("graceful shutdown error", "error", err)
 	}
-	log.Println("server stopped")
+	slog.Info("server stopped")
 }
