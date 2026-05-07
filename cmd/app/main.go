@@ -16,6 +16,13 @@ import (
 	"github.com/mauv0809/crispy-broccoli/docs"
 )
 
+// Build metadata, populated via -ldflags at build time.
+// See Dockerfile for the build args wiring.
+var (
+	buildSHA  = "dev"
+	buildTime = "unknown"
+)
+
 // @title DeepValue API
 // @version 1.0
 // @description Personal value investing portfolio manager API
