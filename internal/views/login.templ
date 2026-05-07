@@ -1,0 +1,90 @@
+package views
+
+// LoginPage is the unauthenticated entry point. Both auth methods land
+// here when RequireAuth rejects an HTML request. GoogleEnabled is false
+// when GOOGLE_CLIENT_ID/SECRET are unset (e.g. in preview deploys).
+templ LoginPage(googleEnabled bool) {
+	@AuthLayout("Sign in") {
+		<div class="card bg-base-200 w-full max-w-sm shadow-xl">
+			<div class="card-body">
+				<h1 class="card-title justify-center text-2xl mb-2">Sign in to DeepValue</h1>
+				if googleEnabled {
+					<a href="/auth/google/login" class="btn btn-primary btn-block">
+						Continue with Google
+					</a>
+					<div class="divider text-xs">or</div>
+				}
+				<form action="/auth/magic/request" method="POST" class="space-y-3">
+					<label class="form-control">
+						<div class="label">
+							<span class="label-text">Email</span>
+						</div>
+						<input
+							type="email"
+							name="email"
+							required
+							autocomplete="email"
+							placeholder="you@example.com"
+							class="input input-bordered w-full"
+						/>
+					</label>
+					<button type="submit" class="btn btn-secondary btn-block">
+						Send magic link
+					</button>
+				</form>
+			</div>
+		</div>
+	}
+}
+
+templ MagicSent() {
+	@AuthLayout("Check your inbox") {
+		<div class="card bg-base-200 w-full max-w-sm shadow-xl">
+			<div class="card-body text-center">
+				<h1 class="card-title justify-center text-2xl">Check your inbox</h1>
+				<p class="text-base-content/70 text-sm mt-2">
+					If your email is registered, a sign-in link is on its way.
+					Open it on this device to finish signing in.
+				</p>
+				<p class="text-base-content/50 text-xs mt-4">
+					Links expire after 15 minutes and can only be used once.
+				</p>
+			</div>
+		</div>
+	}
+}
+
+templ MagicError(reason string) {
+	@AuthLayout("Sign-in link invalid") {
+		<div class="card bg-base-200 w-full max-w-sm shadow-xl">
+			<div class="card-body text-center">
+				<h1 class="card-title justify-center text-2xl">Sign-in link invalid</h1>
+				<p class="text-base-content/70 text-sm mt-2">{ reason }</p>
+				<a href="/auth/login" class="btn btn-primary btn-block mt-4">Request a new link</a>
+			</div>
+		</div>
+	}
+}
+
+// AuthLayout is a stripped-down version of Layout for unauthenticated
+// pages — no nav, no API-docs link, just the brand and the centered card.
+// Lives here (not in layout.templ) so the auth page renders self-contained.
+templ AuthLayout(title string) {
+	<!DOCTYPE html>
+	<html lang="en" data-theme="dark">
+		<head>
+			<meta charset="UTF-8"/>
+			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<title>{ title } | DeepValue</title>
+			<link rel="icon" type="image/png" href="/assets/favicon.png"/>
+			<link rel="stylesheet" href="/assets/css/output.css"/>
+		</head>
+		<body class="bg-base-100 text-base-content min-h-screen flex flex-col items-center justify-center px-4">
+			<a href="/" class="flex items-center gap-2 mb-6">
+				<img src="/assets/mascot.png" alt="DeepValue" class="w-10 h-10 rounded-full"/>
+				<span class="text-2xl font-bold text-primary">DeepValue</span>
+			</a>
+			{ children... }
+		</body>
+	</html>
+}

@@ -64,8 +64,9 @@ func SetUserOnContext(c echo.Context, u *users.User) {
 }
 
 // RequireAuth ensures a session-bound, active user exists. HTML requests
-// without a session redirect to the login route; HTMX/JSON requests get a
-// 401 instead so the client can handle it without a page reload.
+// without a session redirect to /auth/login (the unified entry that offers
+// Google OAuth and magic-link sign-in). HTMX/JSON requests get a 401 instead
+// so the client can handle it without a page reload.
 func RequireAuth(sess Session, loader UserLoader) echo.MiddlewareFunc {
 	return func(next echo.HandlerFunc) echo.HandlerFunc {
 		return func(c echo.Context) error {
@@ -108,7 +109,7 @@ func rejectUnauthenticated(c echo.Context) error {
 	if isAPI(c) {
 		return c.JSON(http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 	}
-	return c.Redirect(http.StatusSeeOther, "/auth/google/login")
+	return c.Redirect(http.StatusSeeOther, "/auth/login")
 }
 
 func isAPI(c echo.Context) bool {

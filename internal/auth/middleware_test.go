@@ -48,8 +48,8 @@ func TestRequireAuth_NoSession_RedirectsHTML(t *testing.T) {
 	if rec.Code != http.StatusSeeOther {
 		t.Errorf("status: got %d, want 303", rec.Code)
 	}
-	if loc := rec.Header().Get("Location"); loc != "/auth/google/login" {
-		t.Errorf("location: got %q, want /auth/google/login", loc)
+	if loc := rec.Header().Get("Location"); loc != "/auth/login" {
+		t.Errorf("location: got %q, want /auth/login", loc)
 	}
 }
 

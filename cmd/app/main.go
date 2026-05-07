@@ -21,6 +21,7 @@ import (
 	"github.com/mauv0809/crispy-broccoli/internal/auth"
 	"github.com/mauv0809/crispy-broccoli/internal/buildinfo"
 	"github.com/mauv0809/crispy-broccoli/internal/db"
+	"github.com/mauv0809/crispy-broccoli/internal/email"
 	"github.com/mauv0809/crispy-broccoli/internal/handlers"
 	"github.com/mauv0809/crispy-broccoli/internal/ingest"
 	"github.com/mauv0809/crispy-broccoli/internal/observability"
@@ -163,6 +164,7 @@ func main() {
 	gothic.Store = auth.NewGothicStore(sessionKey, env == "production")
 
 	// Google OAuth provider.
+	googleEnabled := false
 	if cid, csec := os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"); cid != "" && csec != "" {
 		if err := auth.RegisterGoogle(auth.GoogleConfig{
 			ClientID:     cid,
@@ -172,12 +174,30 @@ func main() {
 			slog.Error("google oauth init failed", "error", err)
 			os.Exit(1)
 		}
+		googleEnabled = true
 		slog.Info("google oauth provider registered")
 	} else {
 		slog.Warn("google oauth disabled; GOOGLE_CLIENT_ID/SECRET not set")
 	}
 
+	// Email sender. LogSender is the default — preview deploys leave
+	// RESEND_API_KEY unset so test traffic doesn't burn quota or risk
+	// emails to real inboxes from a PR branch.
+	var sender email.Sender = email.LogSender{Logger: logger}
+	if k := os.Getenv("RESEND_API_KEY"); k != "" {
+		from := os.Getenv("MAIL_FROM")
+		if from == "" {
+			slog.Error("RESEND_API_KEY set but MAIL_FROM is empty")
+			os.Exit(1)
+		}
+		sender = email.NewResendSender(k, from)
+		slog.Info("resend email sender registered", "from", from)
+	} else {
+		slog.Warn("email sender: using LogSender (RESEND_API_KEY not set)")
+	}
+
 	googleHandler := auth.NewGoogleHandler(sessionManager, usersRepo)
+	magicHandler := auth.NewMagicHandler(sessionManager, usersRepo, auth.NewMagicTokenStore(pool), sender, os.Getenv("MAIL_FROM"))
 	authMiddleware := auth.RequireAuth(auth.NewSession(sessionManager), auth.NewLoader(usersRepo))
 	adminMiddleware := auth.RequireAdmin()
 
@@ -260,6 +280,7 @@ func main() {
 	// Static files
 	e.Static("/assets", "assets")
 	googleHandler.Mount(e)
+	magicHandler.Mount(e, googleEnabled)
 
 	// Routes
 	e.GET("/health", h.Health)
