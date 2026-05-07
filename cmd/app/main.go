@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
@@ -156,6 +157,25 @@ func main() {
 	e.Use(observability.SentryErrorMiddleware(sentryEnabled))
 	e.Use(middleware.Recover())
 	e.Use(auth.SessionMiddleware(sessionManager))
+	e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
+		TokenLookup:    "header:X-CSRF-Token,form:_csrf",
+		CookieName:     "_csrf",
+		CookiePath:     "/",
+		CookieHTTPOnly: false, // JS needs to read it indirectly via meta tag
+		CookieSameSite: http.SameSiteLaxMode,
+		CookieSecure:   env == "production",
+		Skipper: func(c echo.Context) bool {
+			p := c.Request().URL.Path
+			switch {
+			case p == "/health",
+				p == "/api/openapi.json",
+				strings.HasPrefix(p, "/assets/"),
+				strings.HasPrefix(p, "/auth/"):
+				return true
+			}
+			return false
+		},
+	}))
 
 	// Setup handlers
 	h := handlers.New(pool, buildinfo.Info{SHA: buildSHA, Time: buildTime})

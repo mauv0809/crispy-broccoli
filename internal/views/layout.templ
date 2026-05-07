@@ -6,6 +6,7 @@ templ Layout(title string) {
 		<head>
 			<meta charset="UTF-8"/>
 			<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+			<meta name="csrf-token" content={ CSRFFromContext(ctx) }/>
 			<title>{ title } | DeepValue</title>
 			<link rel="icon" type="image/png" href="/assets/favicon.png"/>
 			<link rel="stylesheet" href="/assets/css/output.css"/>
@@ -20,6 +21,13 @@ templ Layout(title string) {
 					const theme = localStorage.getItem('theme') || 'dark';
 					document.documentElement.setAttribute('data-theme', theme);
 				})();
+				// Inject CSRF token into every HTMX request as X-CSRF-Token.
+				document.addEventListener('htmx:configRequest', function(e) {
+					var meta = document.querySelector('meta[name="csrf-token"]');
+					if (meta) {
+						e.detail.headers['X-CSRF-Token'] = meta.getAttribute('content');
+					}
+				});
 			</script>
 		</head>
 		<body class="bg-base-100 text-base-content min-h-screen transition-colors duration-200">
