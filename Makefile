@@ -45,12 +45,14 @@ css-watch:
 swagger:
 	swag init -g cmd/app/main.go --parseDependency --parseInternal
 
-# Install dev tools
+# Install dev tools at the versions pinned in go.mod (templ, swag) plus
+# floaters that aren't imported anywhere (goose, air). Bump pinned
+# versions by editing tools.go + running `go get`.
 tools:
-	go install github.com/a-h/templ/cmd/templ@latest
+	go install github.com/a-h/templ/cmd/templ
+	go install github.com/swaggo/swag/cmd/swag
 	go install github.com/pressly/goose/v3/cmd/goose@latest
 	go install github.com/air-verse/air@latest
-	go install github.com/swaggo/swag/cmd/swag@latest
 
 # First-time setup
 setup:
