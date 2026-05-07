@@ -92,3 +92,33 @@ DeepValue uses Catppuccin with 4 flavors:
 - **Mocha** (darkest, default)
 
 Toggle themes via the dropdown in the nav bar.
+
+## Tooling versions
+
+Code generators (`templ`, `swag`) are pinned via `tools.go` + `go.mod`.
+CSS tooling (`tailwindcss`) is pinned via `package.json` + `package-lock.json`.
+Both CI and local development must use the pinned versions, otherwise the
+`generated-go-fresh` and `generated-css-fresh` CI jobs will fail.
+
+To bump a generator version:
+
+```bash
+# Go tool (templ or swag):
+go get github.com/a-h/templ/cmd/templ@<new-version>
+make tools                    # installs the new version locally
+templ generate                # regenerate
+git add tools.go go.mod go.sum internal/views/*_templ.go
+git commit -m "chore: bump templ to <new-version>"
+
+# Tailwind:
+npm install tailwindcss@<new-version>
+npm run css:build
+git add package.json package-lock.json assets/css/output.css
+git commit -m "chore: bump tailwindcss to <new-version>"
+```
+
+To install the locked versions on a fresh checkout:
+
+```bash
+make setup        # runs npm install + make tools
+```
