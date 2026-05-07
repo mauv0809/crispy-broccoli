@@ -9,7 +9,7 @@ import (
 
 // Config controls how slog is wired at startup.
 type Config struct {
-	Env    string    // "production" → JSON handler; anything else → text handler
+	Env    string // "production" → JSON handler; anything else → text handler
 	Level  slog.Level
 	Output io.Writer // nil defaults to os.Stdout
 }

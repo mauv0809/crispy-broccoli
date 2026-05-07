@@ -8,8 +8,9 @@ import (
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/mauv0809/crispy-broccoli/internal/ingest"
 	"github.com/shopspring/decimal"
+
+	"github.com/mauv0809/crispy-broccoli/internal/ingest"
 )
 
 const dbBatchSize = 1000 // Rows per database batch for resilience

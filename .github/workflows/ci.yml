@@ -22,6 +22,10 @@ jobs:
           cache: true
       - name: go vet
         run: go vet ./...
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: latest
 
   generated-go-fresh:
     name: generated-go-fresh

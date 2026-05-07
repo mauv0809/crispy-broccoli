@@ -16,15 +16,15 @@ type BacktestConfig struct {
 type BacktestResult struct {
 	Config              BacktestConfig   `json:"config"`
 	Periods             []BacktestPeriod `json:"periods"`
-	TotalReturn         float64          `json:"total_return"`          // Total percentage return
-	AnnualizedReturn    float64          `json:"annualized_return"`     // CAGR
-	BenchmarkReturn     float64          `json:"benchmark_return"`      // SPY total return
-	BenchmarkAnnualized float64          `json:"benchmark_annualized"`  // SPY CAGR
-	Alpha               float64          `json:"alpha"`                 // Excess return vs benchmark
-	MaxDrawdown         float64          `json:"max_drawdown"`          // Maximum peak-to-trough decline
-	SharpeRatio         float64          `json:"sharpe_ratio"`          // Risk-adjusted return (if we add volatility calc)
-	PortfolioCurve      []CurvePoint     `json:"portfolio_curve"`       // For charting
-	BenchmarkCurve      []CurvePoint     `json:"benchmark_curve"`       // For charting
+	TotalReturn         float64          `json:"total_return"`         // Total percentage return
+	AnnualizedReturn    float64          `json:"annualized_return"`    // CAGR
+	BenchmarkReturn     float64          `json:"benchmark_return"`     // SPY total return
+	BenchmarkAnnualized float64          `json:"benchmark_annualized"` // SPY CAGR
+	Alpha               float64          `json:"alpha"`                // Excess return vs benchmark
+	MaxDrawdown         float64          `json:"max_drawdown"`         // Maximum peak-to-trough decline
+	SharpeRatio         float64          `json:"sharpe_ratio"`         // Risk-adjusted return (if we add volatility calc)
+	PortfolioCurve      []CurvePoint     `json:"portfolio_curve"`      // For charting
+	BenchmarkCurve      []CurvePoint     `json:"benchmark_curve"`      // For charting
 	ExecutionTimeMs     int64            `json:"execution_time_ms"`
 }
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+
 	"github.com/mauv0809/crispy-broccoli/internal/buildinfo"
 )
 

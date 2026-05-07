@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+
 	"github.com/mauv0809/crispy-broccoli/internal/buildinfo"
 	"github.com/mauv0809/crispy-broccoli/internal/db"
 	"github.com/mauv0809/crispy-broccoli/internal/handlers"
@@ -163,7 +164,7 @@ func main() {
 		api.GET("/strategies/:id", strategyHandler.GetStrategy)
 		api.PUT("/strategies/:id", strategyHandler.UpdateStrategy)
 		api.DELETE("/strategies/:id", strategyHandler.DeleteStrategy)
-		api.POST("/strategies/:id/run", strategyHandler.RunStrategyHTMX) // Returns HTML for HTMX
+		api.POST("/strategies/:id/run", strategyHandler.RunStrategyHTMX)     // Returns HTML for HTMX
 		api.GET("/strategies/:id/runs", strategyHandler.GetStrategyRunsHTMX) // Returns HTML for HTMX
 		api.GET("/strategies/:id/stats", strategyHandler.GetStrategyStats)
 		api.POST("/strategies/:id/backtest", strategyHandler.RunBacktest)          // JSON API for backtest

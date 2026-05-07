@@ -44,7 +44,7 @@ func DefaultStrategies() []struct {
 					// 40% weight on quality (higher ROA = better)
 					{Field: "roa", Direction: "desc", Weight: 40},
 				},
-				Dimension: "ARY",   // Annual Reported Yearly (matches Python's ART)
+				Dimension: "ARY", // Annual Reported Yearly (matches Python's ART)
 				Limit:     6,
 				Universe:  "sp500", // Restrict to S&P 500 members
 				Weights:   []float64{0.25, 0.25, 0.15, 0.15, 0.10, 0.10},

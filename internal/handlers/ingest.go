@@ -4,12 +4,14 @@ import (
 	"fmt"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/labstack/echo/v4"
+
 	"github.com/mauv0809/crispy-broccoli/internal/db"
 	"github.com/mauv0809/crispy-broccoli/internal/ingest"
 )
@@ -483,7 +485,9 @@ func (h *IngestHandler) IngestPrices(c echo.Context) error {
 	// Parse limit param
 	batchLimit := 10
 	if limitParam := c.QueryParam("limit"); limitParam != "" {
-		fmt.Sscanf(limitParam, "%d", &batchLimit)
+		if v, err := strconv.Atoi(limitParam); err == nil {
+			batchLimit = v
+		}
 	}
 	if batchLimit > limits.HourlyRemaining {
 		batchLimit = limits.HourlyRemaining
@@ -492,13 +496,17 @@ func (h *IngestHandler) IngestPrices(c echo.Context) error {
 	// Parse stale_days param (default 3 days)
 	staleDays := 3
 	if staleParam := c.QueryParam("stale_days"); staleParam != "" {
-		fmt.Sscanf(staleParam, "%d", &staleDays)
+		if v, err := strconv.Atoi(staleParam); err == nil {
+			staleDays = v
+		}
 	}
 
 	// Parse retry_days param (default 7 days - how long to wait before retrying tickers with no data)
 	retryDays := 7
 	if retryParam := c.QueryParam("retry_days"); retryParam != "" {
-		fmt.Sscanf(retryParam, "%d", &retryDays)
+		if v, err := strconv.Atoi(retryParam); err == nil {
+			retryDays = v
+		}
 	}
 
 	// Parse ticker filter or get tickers needing updates
@@ -638,4 +646,3 @@ func (h *IngestHandler) IngestPrices(c echo.Context) error {
 		Elapsed: elapsed.String(),
 	})
 }
-

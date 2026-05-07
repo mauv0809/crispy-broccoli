@@ -289,7 +289,7 @@ func ParseSEP(resp *Response) ([]DailyRow, error) {
 			Open:        getDecimal(row, idx, "open"),
 			High:        getDecimal(row, idx, "high"),
 			Low:         getDecimal(row, idx, "low"),
-			Close:       getDecimal(row, idx, "closeadj"),  // Use adjusted close for backtesting
+			Close:       getDecimal(row, idx, "closeadj"), // Use adjusted close for backtesting
 			CloseUnadj:  getDecimal(row, idx, "closeunadj"),
 			Volume:      getInt64(row, idx, "volume"),
 			LastUpdated: getTime(row, idx, "lastupdated"),

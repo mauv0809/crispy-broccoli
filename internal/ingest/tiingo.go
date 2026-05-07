@@ -39,12 +39,12 @@ type TiingoClient struct {
 
 	// Rate limit tracking
 	mu             sync.Mutex
-	hourlyRequests []time.Time       // timestamps of requests in last hour
-	dailyRequests  []time.Time       // timestamps of requests in last 24 hours
-	uniqueSymbols  map[string]bool   // symbols fetched this month
-	monthStart     time.Time         // start of current tracking month
-	rateLimited    bool              // currently rate limited
-	rateLimitReset time.Time         // when rate limit resets
+	hourlyRequests []time.Time     // timestamps of requests in last hour
+	dailyRequests  []time.Time     // timestamps of requests in last 24 hours
+	uniqueSymbols  map[string]bool // symbols fetched this month
+	monthStart     time.Time       // start of current tracking month
+	rateLimited    bool            // currently rate limited
+	rateLimitReset time.Time       // when rate limit resets
 }
 
 // NewTiingoClient creates a new Tiingo API client.
@@ -265,7 +265,7 @@ func (c *TiingoClient) FetchDaily(ctx context.Context, ticker string, startDate,
 			Open:       &open,
 			High:       &high,
 			Low:        &low,
-			Close:      &adjClose,    // Use adjusted close for returns
+			Close:      &adjClose, // Use adjusted close for returns
 			CloseUnadj: &closeUnadj,
 			Volume:     &volume,
 			Dividends:  &dividend,

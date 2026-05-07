@@ -20,7 +20,7 @@ type Strategy struct {
 type Rules struct {
 	Filters   []Filter  `json:"filters"`
 	Ranking   []Ranking `json:"ranking"`
-	Dimension string    `json:"dimension"`          // MRQ, MRY, ARQ, ARY
+	Dimension string    `json:"dimension"` // MRQ, MRY, ARQ, ARY
 	Limit     int       `json:"limit"`
 	Weights   []float64 `json:"weights,omitempty"`  // Optional custom portfolio weights (must sum to 1.0)
 	Universe  string    `json:"universe,omitempty"` // Optional: "sp500" to restrict to S&P 500 members, empty for all stocks
@@ -47,7 +47,7 @@ type Recommendation struct {
 	CompanyName string         `json:"company_name"`
 	Sector      string         `json:"sector"`
 	Score       float64        `json:"score"`
-	Metrics     map[string]any `json:"metrics"`    // All requested fields
+	Metrics     map[string]any `json:"metrics"`     // All requested fields
 	IsFallback  bool           `json:"is_fallback"` // True if this stock didn't pass all filters but was added to fill quota
 }
 
