@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/hex"
+	"flag"
 	"log/slog"
 	"net/http"
 	"os"
@@ -43,6 +44,11 @@ var (
 // @BasePath /
 
 func main() {
+	addUserEmail := flag.String("add-user", "", "Add a user with the given email and exit")
+	disableUserEmail := flag.String("disable-user", "", "Disable the user with the given email and exit")
+	addUserAdmin := flag.Bool("admin", false, "When used with --add-user, mark the user as an admin")
+	flag.Parse()
+
 	env := os.Getenv("ENV")
 	if env == "" {
 		env = "development"
@@ -92,6 +98,23 @@ func main() {
 	slog.Info("database connected")
 
 	usersRepo := users.NewRepository(pool)
+
+	// CLI short-circuit: provisioning commands don't need to start the HTTP server.
+	if *addUserEmail != "" {
+		if err := users.AddUser(ctx, usersRepo, *addUserEmail, *addUserAdmin); err != nil {
+			slog.Error("add-user failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *disableUserEmail != "" {
+		if err := users.DisableUser(ctx, usersRepo, *disableUserEmail); err != nil {
+			slog.Error("disable-user failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
 	if email := os.Getenv("INITIAL_ADMIN_EMAIL"); email != "" {
 		if _, err := usersRepo.Upsert(ctx, email, "", true); err != nil {
 			slog.Error("initial admin upsert failed", "error", err)
