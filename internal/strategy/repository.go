@@ -265,10 +265,10 @@ func (r *Repository) GetDefaultStrategies(ctx context.Context) ([]Strategy, erro
 
 // RunStats returns aggregate stats for strategy runs
 type RunStats struct {
-	TotalRuns      int       `json:"total_runs"`
-	AvgExecTimeMs  float64   `json:"avg_execution_time_ms"`
-	LastRunAt      time.Time `json:"last_run_at"`
-	AvgMatched     float64   `json:"avg_stocks_matched"`
+	TotalRuns     int       `json:"total_runs"`
+	AvgExecTimeMs float64   `json:"avg_execution_time_ms"`
+	LastRunAt     time.Time `json:"last_run_at"`
+	AvgMatched    float64   `json:"avg_stocks_matched"`
 }
 
 // GetRunStats returns aggregate statistics for a strategy's runs

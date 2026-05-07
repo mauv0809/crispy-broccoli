@@ -62,7 +62,7 @@ func (e *Executor) ExecuteAsOf(ctx context.Context, strategy *Strategy, asOfDate
 	fieldDescs := rows.FieldDescriptions()
 	colNames := make([]string, len(fieldDescs))
 	for i, fd := range fieldDescs {
-		colNames[i] = string(fd.Name)
+		colNames[i] = fd.Name
 	}
 
 	// Collect results
@@ -549,7 +549,7 @@ func (e *Executor) getFallbackRecommendations(ctx context.Context, strategy *Str
 	fieldDescs := rows.FieldDescriptions()
 	colNames := make([]string, len(fieldDescs))
 	for i, fd := range fieldDescs {
-		colNames[i] = string(fd.Name)
+		colNames[i] = fd.Name
 	}
 
 	var recommendations []Recommendation

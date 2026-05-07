@@ -1,0 +1,61 @@
+# golangci-lint configuration. Intentionally lean — start with high-signal
+# linters and add more as the codebase matures. To run locally:
+#   go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
+#   golangci-lint run
+
+run:
+  timeout: 5m
+
+linters:
+  disable-all: true
+  enable:
+    # Bug catchers
+    - errcheck      # unchecked errors
+    - govet         # what go vet does, plus more analyzers
+    - ineffassign   # ineffective assignments
+    - staticcheck   # broad static analysis
+    - unused        # unused vars, fields, funcs
+
+    # Hygiene
+    - gofmt         # standard formatting
+    - goimports     # import grouping/sorting
+    - misspell      # English spelling
+    - unconvert     # unnecessary type conversions
+
+linters-settings:
+  errcheck:
+    # Don't flag common rendering / writing patterns where errors are
+    # routinely ignored (template render to ResponseWriter, etc.).
+    exclude-functions:
+      - (net/http.ResponseWriter).Write
+      - fmt.Fprintln
+      - fmt.Fprintf
+  goimports:
+    local-prefixes: github.com/mauv0809/crispy-broccoli
+
+issues:
+  # Don't lint generated files. Templ files end in _templ.go; swagger docs
+  # are in docs/.
+  exclude-rules:
+    - path: _templ\.go$
+      linters:
+        - errcheck
+        - ineffassign
+        - staticcheck
+        - unused
+        - gofmt
+        - goimports
+        - misspell
+        - unconvert
+    - path: ^docs/
+      linters:
+        - errcheck
+        - ineffassign
+        - staticcheck
+        - unused
+        - gofmt
+        - goimports
+        - misspell
+        - unconvert
+  max-issues-per-linter: 0
+  max-same-issues: 0

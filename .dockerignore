@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+bin
+tmp
+pgdata
+.env
+.env.local
+*.md
+docker-compose.yml
+docs/superpowers

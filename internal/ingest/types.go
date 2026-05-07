@@ -45,19 +45,19 @@ type SF1Row struct {
 	LastUpdated  *time.Time
 
 	// Key fundamentals we need for screening
-	Revenue         *decimal.Decimal
-	NetIncome       *decimal.Decimal
-	EBITDA          *decimal.Decimal
-	FCF             *decimal.Decimal
-	ROIC            *decimal.Decimal
-	PE              *decimal.Decimal
-	EVEBIT          *decimal.Decimal
-	PB              *decimal.Decimal
-	DE              *decimal.Decimal // Debt to Equity
-	MarketCap       *decimal.Decimal
-	EV              *decimal.Decimal
-	Price           *decimal.Decimal
-	ReportPeriod    *time.Time
+	Revenue      *decimal.Decimal
+	NetIncome    *decimal.Decimal
+	EBITDA       *decimal.Decimal
+	FCF          *decimal.Decimal
+	ROIC         *decimal.Decimal
+	PE           *decimal.Decimal
+	EVEBIT       *decimal.Decimal
+	PB           *decimal.Decimal
+	DE           *decimal.Decimal // Debt to Equity
+	MarketCap    *decimal.Decimal
+	EV           *decimal.Decimal
+	Price        *decimal.Decimal
+	ReportPeriod *time.Time
 
 	// Additional fields for ROE calculation
 	Assets      *decimal.Decimal // Total assets
@@ -67,20 +67,20 @@ type SF1Row struct {
 
 // DailyRow represents a row from SHARADAR/DAILY table (daily prices).
 type DailyRow struct {
-	Ticker          string
-	Date            time.Time
-	Open            *decimal.Decimal
-	High            *decimal.Decimal
-	Low             *decimal.Decimal
-	Close           *decimal.Decimal
-	Volume          *int64
-	Dividends       *decimal.Decimal
-	CloseUnadj      *decimal.Decimal
-	MarketCap       *decimal.Decimal
-	EV              *decimal.Decimal
-	PE              *decimal.Decimal
-	PB              *decimal.Decimal
-	LastUpdated     *time.Time
+	Ticker      string
+	Date        time.Time
+	Open        *decimal.Decimal
+	High        *decimal.Decimal
+	Low         *decimal.Decimal
+	Close       *decimal.Decimal
+	Volume      *int64
+	Dividends   *decimal.Decimal
+	CloseUnadj  *decimal.Decimal
+	MarketCap   *decimal.Decimal
+	EV          *decimal.Decimal
+	PE          *decimal.Decimal
+	PB          *decimal.Decimal
+	LastUpdated *time.Time
 }
 
 // SP500Row represents a row from SHARADAR/SP500 table.

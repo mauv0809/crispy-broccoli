@@ -1,0 +1,49 @@
+# ---- css stage ----
+# Tailwind v4 uses platform-specific native binaries, so output bytes
+# vary by platform. Building inside Docker (deterministic Linux image)
+# avoids drift between local dev and CI; output.css is therefore not
+# committed to git.
+FROM node:22-alpine AS css
+WORKDIR /src
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+# Tailwind scans assets/css/input.css (which @source's the templ files)
+# and internal/views/**/*.templ. Copy only what's needed for the scan
+# so this layer's cache only invalidates on relevant changes.
+COPY assets ./assets
+COPY internal/views ./internal/views
+
+RUN npm run css:build
+
+# ---- go build stage ----
+FROM golang:1.24-alpine AS builder
+WORKDIR /src
+
+# Cache deps separately for fast rebuilds
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+# Overlay the freshly-built CSS into assets/ before the binary build
+# (assets/ is bundled into the runtime image below).
+COPY --from=css /src/assets/css/output.css ./assets/css/output.css
+
+ARG BUILD_SHA=unknown
+ARG BUILD_TIME=unknown
+RUN CGO_ENABLED=0 GOOS=linux \
+    go build \
+      -ldflags="-s -w -X main.buildSHA=${BUILD_SHA} -X main.buildTime=${BUILD_TIME}" \
+      -o /out/app ./cmd/app
+
+# ---- runtime stage ----
+FROM gcr.io/distroless/static-debian12:nonroot
+WORKDIR /app
+
+COPY --from=builder /out/app /app/app
+COPY --from=builder /src/assets /app/assets
+
+EXPOSE 8080
+USER nonroot:nonroot
+ENTRYPOINT ["/app/app"]

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"strings"
@@ -87,7 +87,7 @@ func (c *Client) FetchTable(ctx context.Context, table string, params map[string
 			break
 		}
 		cursorID = resp.Meta.NextCursorID
-		log.Printf("Fetching next page (cursor: %s...)", (*cursorID)[:min(20, len(*cursorID))])
+		slog.Info("fetching next page", "cursor_prefix", (*cursorID)[:min(20, len(*cursorID))])
 	}
 
 	return allData, nil
@@ -120,7 +120,7 @@ func (c *Client) fetchPage(ctx context.Context, table string, params map[string]
 	for attempt := 0; attempt < 3; attempt++ {
 		if attempt > 0 {
 			backoff := time.Duration(1<<attempt) * time.Second
-			log.Printf("Retry attempt %d after %v", attempt, backoff)
+			slog.Info("retrying request", "attempt", attempt, "backoff", backoff)
 			time.Sleep(backoff)
 		}
 
@@ -134,7 +134,7 @@ func (c *Client) fetchPage(ctx context.Context, table string, params map[string]
 			return nil, ctx.Err()
 		}
 
-		log.Printf("Request failed (attempt %d): %v", attempt+1, lastErr)
+		slog.Warn("request failed", "attempt", attempt+1, "error", lastErr)
 	}
 
 	return nil, fmt.Errorf("all retries failed: %w", lastErr)
@@ -241,7 +241,7 @@ func (c *Client) FetchSF1Stream(ctx context.Context, tickers []string, dimension
 				defer wg.Done()
 				defer func() { <-sem }() // Release slot
 
-				log.Printf("Fetching SF1 batch %d (%d tickers, dimension: %s)", num, len(batch), dimension)
+				slog.Info("fetching SF1 batch", "batch", num, "ticker_count", len(batch), "dimension", dimension)
 				rows, err := c.fetchSF1Batch(ctx, batch, dimension, since)
 
 				select {
@@ -359,7 +359,7 @@ func (c *Client) FetchDailyStream(ctx context.Context, tickers []string, since t
 				defer wg.Done()
 				defer func() { <-sem }() // Release slot
 
-				log.Printf("Fetching daily batch %d (%d tickers)", num, len(batch))
+				slog.Info("fetching daily batch", "batch", num, "ticker_count", len(batch))
 				rows, err := c.fetchDailyBatch(ctx, batch, since)
 
 				select {
@@ -400,10 +400,7 @@ func (c *Client) FetchSEP(ctx context.Context, tickers []string, startDate, endD
 		params["date.lte"] = endDate.Format("2006-01-02")
 	}
 
-	log.Printf("Fetching SEP prices for %d tickers from %s to %s",
-		len(tickers),
-		startDate.Format("2006-01-02"),
-		endDate.Format("2006-01-02"))
+	slog.Info("fetching SEP prices", "ticker_count", len(tickers), "start", startDate.Format("2006-01-02"), "end", endDate.Format("2006-01-02"))
 
 	resp, err := c.FetchTable(ctx, "SHARADAR/SEP", params)
 	if err != nil {
@@ -457,7 +454,7 @@ func (c *Client) FetchSEPStream(ctx context.Context, tickers []string, startDate
 				defer wg.Done()
 				defer func() { <-sem }() // Release slot
 
-				log.Printf("Fetching SEP batch %d (%d tickers)", num, len(batch))
+				slog.Info("fetching SEP batch", "batch", num, "ticker_count", len(batch))
 				rows, err := c.FetchSEP(ctx, batch, startDate, endDate)
 
 				select {
@@ -492,10 +489,7 @@ func (c *Client) FetchSFP(ctx context.Context, tickers []string, startDate, endD
 		params["date.lte"] = endDate.Format("2006-01-02")
 	}
 
-	log.Printf("Fetching SFP (fund) prices for %d tickers from %s to %s",
-		len(tickers),
-		startDate.Format("2006-01-02"),
-		endDate.Format("2006-01-02"))
+	slog.Info("fetching SFP fund prices", "ticker_count", len(tickers), "start", startDate.Format("2006-01-02"), "end", endDate.Format("2006-01-02"))
 
 	resp, err := c.FetchTable(ctx, "SHARADAR/SFP", params)
 	if err != nil {
@@ -546,6 +540,6 @@ func (c *Client) FetchSP500History(ctx context.Context) ([]SP500Row, error) {
 		return nil, err
 	}
 
-	log.Printf("Fetched %d S&P 500 membership records", len(rows))
+	slog.Info("fetched SP500 membership records", "count", len(rows))
 	return rows, nil
 }

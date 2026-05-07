@@ -3,13 +3,14 @@ package db
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
-	"github.com/mauv0809/crispy-broccoli/internal/ingest"
 	"github.com/shopspring/decimal"
+
+	"github.com/mauv0809/crispy-broccoli/internal/ingest"
 )
 
 const dbBatchSize = 1000 // Rows per database batch for resilience
@@ -80,7 +81,7 @@ func (r *Repository) UpsertFinancialMetrics(ctx context.Context, rows []ingest.S
 		count, err := r.upsertFinancialMetricsBatch(ctx, batchRows)
 		totalCount += count
 		if err != nil {
-			log.Printf("Error in metrics batch %d-%d: %v (inserted %d before error)", i, end, err, count)
+			slog.Error("metrics batch upsert error", "batch_start", i, "batch_end", end, "error", err, "inserted_before_error", count)
 			lastErr = err
 			// Continue with next batch instead of failing entirely
 		}
@@ -226,7 +227,7 @@ func (r *Repository) UpsertDailyPrices(ctx context.Context, rows []ingest.DailyR
 		count, err := r.upsertDailyPricesBatch(ctx, batchRows)
 		totalCount += count
 		if err != nil {
-			log.Printf("Error in daily batch %d-%d: %v (inserted %d before error)", i, end, err, count)
+			slog.Error("daily prices batch upsert error", "batch_start", i, "batch_end", end, "error", err, "inserted_before_error", count)
 			lastErr = err
 		}
 	}
@@ -365,7 +366,7 @@ func sanitizeDecimal(d *decimal.Decimal, field, ticker string, scale int) interf
 
 	abs := d.Abs()
 	if abs.GreaterThan(limit) {
-		log.Printf("OVERFLOW: %s.%s = %s (exceeds DECIMAL(18,%d) limit)", ticker, field, d.String(), scale)
+		slog.Warn("decimal overflow, skipping value", "ticker", ticker, "field", field, "value", d.String(), "scale", scale)
 		return nil // Skip this value instead of failing
 	}
 	return *d
@@ -642,7 +643,7 @@ func (r *Repository) UpsertSP500Membership(ctx context.Context, rows []ingest.SP
 	for range rows {
 		_, err := br.Exec()
 		if err != nil {
-			log.Printf("Error upserting SP500 membership: %v", err)
+			slog.Error("failed to upsert SP500 membership row", "error", err)
 			continue
 		}
 		count++

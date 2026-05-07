@@ -3,11 +3,12 @@ package strategy
 import (
 	"context"
 	"fmt"
-	"log"
+	"log/slog"
 	"math"
 	"time"
 
 	"github.com/jackc/pgx/v5"
+
 	"github.com/mauv0809/crispy-broccoli/internal/db"
 	"github.com/mauv0809/crispy-broccoli/internal/ingest"
 )
@@ -51,7 +52,7 @@ func (b *Backtester) Run(ctx context.Context, strategy *Strategy, config Backtes
 		return nil, fmt.Errorf("no rebalance dates generated for period %s to %s", config.StartDate.Format("2006-01-02"), config.EndDate.Format("2006-01-02"))
 	}
 
-	log.Printf("Backtest: %d rebalance dates from %s to %s", len(rebalanceDates), rebalanceDates[0].Format("2006-01-02"), rebalanceDates[len(rebalanceDates)-1].Format("2006-01-02"))
+	slog.Info("backtest rebalance dates", "count", len(rebalanceDates), "start", rebalanceDates[0].Format("2006-01-02"), "end", rebalanceDates[len(rebalanceDates)-1].Format("2006-01-02"))
 
 	// Run strategy at each rebalance date and track portfolios
 	var periods []BacktestPeriod
@@ -70,12 +71,12 @@ func (b *Backtester) Run(ctx context.Context, strategy *Strategy, config Backtes
 		// Run strategy as of rebalance date
 		result, err := b.executor.ExecuteAsOf(ctx, strategy, rebDate, config.LagDays)
 		if err != nil {
-			log.Printf("Backtest: error executing at %s: %v", rebDate.Format("2006-01-02"), err)
+			slog.Warn("backtest strategy execution error", "date", rebDate.Format("2006-01-02"), "error", err)
 			continue
 		}
 
 		if len(result.Recommendations) == 0 {
-			log.Printf("Backtest: no recommendations at %s", rebDate.Format("2006-01-02"))
+			slog.Warn("backtest no recommendations at rebalance date", "date", rebDate.Format("2006-01-02"))
 			continue
 		}
 
@@ -91,7 +92,7 @@ func (b *Backtester) Run(ctx context.Context, strategy *Strategy, config Backtes
 		// Calculate period returns
 		periodReturn, holdings, err := b.calculatePeriodReturns(ctx, tickers, weights, fallbackFlags, rebDate, periodEnd)
 		if err != nil {
-			log.Printf("Backtest: error calculating returns for period %s to %s: %v", rebDate.Format("2006-01-02"), periodEnd.Format("2006-01-02"), err)
+			slog.Warn("backtest period return calculation error", "period_start", rebDate.Format("2006-01-02"), "period_end", periodEnd.Format("2006-01-02"), "error", err)
 			// Use 0 return if we can't calculate
 			periodReturn = 0
 		}
@@ -114,15 +115,13 @@ func (b *Backtester) Run(ctx context.Context, strategy *Strategy, config Backtes
 			Value: cumulativeValue,
 		})
 
-		log.Printf("Backtest: %s -> %s: %d holdings, return: %.2f%%, cumulative: %.2f",
-			rebDate.Format("2006-01-02"), periodEnd.Format("2006-01-02"),
-			len(holdings), periodReturn*100, cumulativeValue)
+		slog.Info("backtest period result", "period_start", rebDate.Format("2006-01-02"), "period_end", periodEnd.Format("2006-01-02"), "holdings", len(holdings), "return_pct", periodReturn*100, "cumulative_value", cumulativeValue)
 	}
 
 	// Build daily portfolio curve from period holdings
 	dailyPortfolioCurve, err := b.buildDailyPortfolioCurve(ctx, periods)
 	if err != nil {
-		log.Printf("Backtest: error building daily curve: %v, using period points", err)
+		slog.Warn("backtest daily curve build error, falling back to period points", "error", err)
 		// Fall back to period-based curve
 		if len(periods) > 0 {
 			lastPeriod := periods[len(periods)-1]
@@ -138,7 +137,7 @@ func (b *Backtester) Run(ctx context.Context, strategy *Strategy, config Backtes
 	// Calculate benchmark returns
 	benchmarkCurve, benchmarkReturn, err := b.getBenchmarkCurve(ctx, config.StartDate, config.EndDate)
 	if err != nil {
-		log.Printf("Backtest: error getting benchmark: %v", err)
+		slog.Warn("backtest benchmark retrieval error", "error", err)
 		benchmarkReturn = 0
 	}
 
@@ -282,17 +281,17 @@ func (b *Backtester) calculatePeriodReturns(ctx context.Context, tickers []strin
 			if err == pgx.ErrNoRows && b.nasdaqClient != nil {
 				// Try to fetch prices from Nasdaq Data Link
 				if fetchErr := b.fetchAndStorePrices(ctx, ticker, start, end); fetchErr != nil {
-					log.Printf("Backtest: failed to fetch prices for %s: %v", ticker, fetchErr)
+					slog.Warn("backtest failed to fetch prices", "ticker", ticker, "error", fetchErr)
 					continue
 				}
 				// Retry after fetch
 				entryPrice, err = b.repo.GetPriceOnOrBefore(ctx, ticker, start)
 				if err != nil {
-					log.Printf("Backtest: still no entry price for %s at %s after fetch", ticker, start.Format("2006-01-02"))
+					slog.Warn("backtest still no entry price after fetch", "ticker", ticker, "date", start.Format("2006-01-02"))
 					continue
 				}
 			} else {
-				log.Printf("Backtest: no entry price for %s at %s", ticker, start.Format("2006-01-02"))
+				slog.Warn("backtest no entry price", "ticker", ticker, "date", start.Format("2006-01-02"))
 				continue
 			}
 		}
@@ -300,7 +299,7 @@ func (b *Backtester) calculatePeriodReturns(ctx context.Context, tickers []strin
 		// Get exit price (on or before end date)
 		exitPrice, err := b.repo.GetPriceOnOrBefore(ctx, ticker, end)
 		if err != nil {
-			log.Printf("Backtest: no exit price for %s at %s", ticker, end.Format("2006-01-02"))
+			slog.Warn("backtest no exit price", "ticker", ticker, "date", end.Format("2006-01-02"))
 			continue
 		}
 
@@ -337,39 +336,37 @@ func (b *Backtester) fetchAndStorePrices(ctx context.Context, ticker string, sta
 
 	// Try Tiingo first (better coverage for all stocks)
 	if b.tiingoClient != nil {
-		log.Printf("Backtest: fetching prices for %s from Tiingo (%s to %s)",
-			ticker, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+		slog.Info("backtest fetching prices from Tiingo", "ticker", ticker, "start", startDate.Format("2006-01-02"), "end", endDate.Format("2006-01-02"))
 		rows, err = b.tiingoClient.FetchDaily(ctx, ticker, startDate, endDate)
 		if err == nil && len(rows) > 0 {
 			count, upsertErr := b.repo.UpsertDailyPrices(ctx, rows)
 			if upsertErr != nil {
 				return fmt.Errorf("upserting Tiingo prices: %w", upsertErr)
 			}
-			log.Printf("Backtest: stored %d Tiingo prices for %s", count, ticker)
+			slog.Info("backtest stored Tiingo prices", "count", count, "ticker", ticker)
 			return nil
 		}
 		if err != nil {
-			log.Printf("Backtest: Tiingo failed for %s: %v, trying SEP fallback", ticker, err)
+			slog.Warn("backtest Tiingo fetch failed, trying SEP fallback", "ticker", ticker, "error", err)
 		}
 	}
 
 	// Fallback to Nasdaq SEP
 	if b.nasdaqClient != nil {
-		log.Printf("Backtest: fetching SEP prices for %s (%s to %s)",
-			ticker, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+		slog.Info("backtest fetching SEP prices", "ticker", ticker, "start", startDate.Format("2006-01-02"), "end", endDate.Format("2006-01-02"))
 		rows, err = b.nasdaqClient.FetchSEP(ctx, []string{ticker}, startDate, endDate)
 		if err != nil {
 			return fmt.Errorf("SEP fetch failed for %s: %w", ticker, err)
 		}
 		if len(rows) == 0 {
-			log.Printf("Backtest: no SEP data found for %s", ticker)
+			slog.Warn("backtest no SEP data found", "ticker", ticker)
 			return fmt.Errorf("no price data for %s", ticker)
 		}
 		count, upsertErr := b.repo.UpsertDailyPrices(ctx, rows)
 		if upsertErr != nil {
 			return fmt.Errorf("upserting SEP prices: %w", upsertErr)
 		}
-		log.Printf("Backtest: stored %d SEP prices for %s", count, ticker)
+		slog.Info("backtest stored SEP prices", "count", count, "ticker", ticker)
 		return nil
 	}
 
@@ -387,16 +384,14 @@ func (b *Backtester) fetchAndStoreBenchmarkPrices(ctx context.Context, ticker st
 
 	if isETF && b.tiingoClient != nil {
 		// Use Tiingo for ETF benchmarks
-		log.Printf("Backtest: fetching ETF benchmark %s from Tiingo (%s to %s)",
-			ticker, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+		slog.Info("backtest fetching ETF benchmark from Tiingo", "ticker", ticker, "start", startDate.Format("2006-01-02"), "end", endDate.Format("2006-01-02"))
 		rows, err = b.tiingoClient.FetchDaily(ctx, ticker, startDate, endDate)
 		if err != nil {
 			return fmt.Errorf("fetching benchmark %s from Tiingo: %w", ticker, err)
 		}
 	} else if b.nasdaqClient != nil {
 		// Use SEP for equity benchmarks
-		log.Printf("Backtest: fetching SEP benchmark prices for %s (%s to %s)",
-			ticker, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+		slog.Info("backtest fetching SEP benchmark prices", "ticker", ticker, "start", startDate.Format("2006-01-02"), "end", endDate.Format("2006-01-02"))
 		rows, err = b.nasdaqClient.FetchSEP(ctx, []string{ticker}, startDate, endDate)
 		if err != nil {
 			return fmt.Errorf("fetching benchmark %s from SEP: %w", ticker, err)
@@ -413,7 +408,7 @@ func (b *Backtester) fetchAndStoreBenchmarkPrices(ctx context.Context, ticker st
 	if err != nil {
 		return fmt.Errorf("upserting benchmark prices: %w", err)
 	}
-	log.Printf("Backtest: stored %d benchmark prices for %s", count, ticker)
+	slog.Info("backtest stored benchmark prices", "count", count, "ticker", ticker)
 	return nil
 }
 
@@ -427,9 +422,9 @@ func (b *Backtester) getBenchmarkCurve(ctx context.Context, start, end time.Time
 
 	// Try to fetch benchmark prices if none exist
 	if len(prices) == 0 && (b.tiingoClient != nil || b.nasdaqClient != nil) {
-		log.Printf("Backtest: no benchmark prices found, attempting to fetch SPY")
+		slog.Info("backtest no benchmark prices found, fetching SPY")
 		if fetchErr := b.fetchAndStoreBenchmarkPrices(ctx, "SPY", start, end); fetchErr != nil {
-			log.Printf("Backtest: benchmark unavailable: %v", fetchErr)
+			slog.Warn("backtest benchmark unavailable", "error", fetchErr)
 			// Return gracefully - backtest can proceed without benchmark
 			return nil, 0, nil
 		}
@@ -441,7 +436,7 @@ func (b *Backtester) getBenchmarkCurve(ctx context.Context, start, end time.Time
 	}
 
 	if len(prices) == 0 {
-		log.Printf("Backtest: no benchmark data available, proceeding without benchmark comparison")
+		slog.Info("backtest proceeding without benchmark data")
 		return nil, 0, nil // Graceful - no error, just no benchmark
 	}
 

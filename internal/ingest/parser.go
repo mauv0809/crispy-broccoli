@@ -2,7 +2,7 @@ package ingest
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"time"
 
 	"github.com/shopspring/decimal"
@@ -189,9 +189,9 @@ func ParseDaily(resp *Response) ([]DailyRow, error) {
 	for _, col := range resp.Datatable.Columns {
 		colNames = append(colNames, col.Name)
 	}
-	log.Printf("DAILY columns: %v", colNames)
+	slog.Info("daily columns", "columns", colNames)
 	if len(resp.Datatable.Data) > 0 {
-		log.Printf("DAILY first row sample: %v", resp.Datatable.Data[0])
+		slog.Info("daily first row sample", "row", resp.Datatable.Data[0])
 	}
 
 	for i, row := range resp.Datatable.Data {
@@ -219,8 +219,7 @@ func ParseDaily(resp *Response) ([]DailyRow, error) {
 
 		// Debug: log first parsed row
 		if i == 0 {
-			log.Printf("DAILY first parsed row: Ticker=%s Date=%s Open=%v High=%v Low=%v Close=%v Volume=%v MarketCap=%v",
-				dr.Ticker, dr.Date.Format("2006-01-02"), dr.Open, dr.High, dr.Low, dr.Close, dr.Volume, dr.MarketCap)
+			slog.Info("daily first parsed row", "ticker", dr.Ticker, "date", dr.Date.Format("2006-01-02"), "open", dr.Open, "high", dr.High, "low", dr.Low, "close", dr.Close, "volume", dr.Volume, "market_cap", dr.MarketCap)
 		}
 
 		if dr.Ticker != "" {
@@ -272,7 +271,7 @@ func ParseSEP(resp *Response) ([]DailyRow, error) {
 		for _, col := range resp.Datatable.Columns {
 			colNames = append(colNames, col.Name)
 		}
-		log.Printf("SEP columns: %v", colNames)
+		slog.Info("SEP columns", "columns", colNames)
 	}
 
 	for i, row := range resp.Datatable.Data {
@@ -290,7 +289,7 @@ func ParseSEP(resp *Response) ([]DailyRow, error) {
 			Open:        getDecimal(row, idx, "open"),
 			High:        getDecimal(row, idx, "high"),
 			Low:         getDecimal(row, idx, "low"),
-			Close:       getDecimal(row, idx, "closeadj"),  // Use adjusted close for backtesting
+			Close:       getDecimal(row, idx, "closeadj"), // Use adjusted close for backtesting
 			CloseUnadj:  getDecimal(row, idx, "closeunadj"),
 			Volume:      getInt64(row, idx, "volume"),
 			LastUpdated: getTime(row, idx, "lastupdated"),
@@ -298,8 +297,7 @@ func ParseSEP(resp *Response) ([]DailyRow, error) {
 
 		// Debug: log first parsed row
 		if i == 0 {
-			log.Printf("SEP first parsed row: Ticker=%s Date=%s Close(adj)=%v CloseUnadj=%v",
-				dr.Ticker, dr.Date.Format("2006-01-02"), dr.Close, dr.CloseUnadj)
+			slog.Info("SEP first parsed row", "ticker", dr.Ticker, "date", dr.Date.Format("2006-01-02"), "close_adj", dr.Close, "close_unadj", dr.CloseUnadj)
 		}
 
 		if dr.Ticker != "" {
@@ -307,6 +305,6 @@ func ParseSEP(resp *Response) ([]DailyRow, error) {
 		}
 	}
 
-	log.Printf("Parsed %d SEP price rows", len(rows))
+	slog.Info("parsed SEP price rows", "count", len(rows))
 	return rows, nil
 }
