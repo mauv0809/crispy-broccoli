@@ -19,6 +19,7 @@ import (
 	"github.com/mauv0809/crispy-broccoli/internal/ingest"
 	"github.com/mauv0809/crispy-broccoli/internal/observability"
 	"github.com/mauv0809/crispy-broccoli/internal/strategy"
+	"github.com/mauv0809/crispy-broccoli/internal/users"
 
 	"github.com/mauv0809/crispy-broccoli/docs"
 )
@@ -84,6 +85,15 @@ func main() {
 	}
 	defer pool.Close()
 	slog.Info("database connected")
+
+	usersRepo := users.NewRepository(pool)
+	if email := os.Getenv("INITIAL_ADMIN_EMAIL"); email != "" {
+		if _, err := usersRepo.Upsert(ctx, email, "", true); err != nil {
+			slog.Error("initial admin upsert failed", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("initial admin ensured", "email", email)
+	}
 
 	// Setup Echo
 	e := echo.New()
