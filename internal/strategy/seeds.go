@@ -2,7 +2,7 @@ package strategy
 
 import (
 	"context"
-	"log"
+	"log/slog"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 )
@@ -78,15 +78,15 @@ func SeedDefaultStrategies(ctx context.Context, pool *pgxpool.Pool) error {
 
 		_, err := repo.CreateDefaultStrategy(ctx, def.Name, def.Description, def.Rules)
 		if err != nil {
-			log.Printf("Warning: failed to seed strategy %q: %v", def.Name, err)
+			slog.Warn("failed to seed strategy", "name", def.Name, "error", err)
 			continue
 		}
 		seeded++
-		log.Printf("Seeded default strategy: %s", def.Name)
+		slog.Info("seeded default strategy", "name", def.Name)
 	}
 
 	if seeded > 0 {
-		log.Printf("Seeded %d default strategies", seeded)
+		slog.Info("seeded default strategies", "count", seeded)
 	}
 
 	return nil

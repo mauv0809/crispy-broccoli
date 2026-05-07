@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
+	"log/slog"
 	"net/http"
 	"net/url"
 	"sync"
@@ -163,7 +163,7 @@ func (c *TiingoClient) setRateLimited() {
 	for i := 0; i < tiingoHourlyLimit; i++ {
 		c.hourlyRequests[i] = now
 	}
-	log.Printf("Tiingo: rate limited by API, reset at %s", c.rateLimitReset.Format("15:04:05"))
+	slog.Warn("tiingo rate limited by API", "reset_at", c.rateLimitReset.Format("15:04:05"))
 }
 
 // TiingoPriceRow represents a single day's price data from Tiingo.
@@ -191,8 +191,7 @@ func (c *TiingoClient) FetchDaily(ctx context.Context, ticker string, startDate,
 	// Check rate limits before making request
 	if !c.CanFetch(ticker) {
 		limits := c.GetRateLimits()
-		log.Printf("Tiingo: rate limited - hourly: %d, daily: %d, monthly symbols: %d",
-			limits.HourlyRemaining, limits.DailyRemaining, limits.MonthlyRemaining)
+		slog.Warn("tiingo rate limited", "hourly_remaining", limits.HourlyRemaining, "daily_remaining", limits.DailyRemaining, "monthly_remaining", limits.MonthlyRemaining)
 		return nil, ErrRateLimited
 	}
 
@@ -209,8 +208,7 @@ func (c *TiingoClient) FetchDaily(ctx context.Context, ticker string, startDate,
 	}
 	u.RawQuery = q.Encode()
 
-	log.Printf("Tiingo: fetching daily prices for %s (%s to %s)",
-		ticker, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+	slog.Info("tiingo fetching daily prices", "ticker", ticker, "start", startDate.Format("2006-01-02"), "end", endDate.Format("2006-01-02"))
 
 	// Make request
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
@@ -274,6 +272,6 @@ func (c *TiingoClient) FetchDaily(ctx context.Context, ticker string, startDate,
 		}
 	}
 
-	log.Printf("Tiingo: fetched %d daily prices for %s", len(rows), ticker)
+	slog.Info("tiingo fetched daily prices", "count", len(rows), "ticker", ticker)
 	return rows, nil
 }

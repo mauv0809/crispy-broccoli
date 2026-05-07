@@ -2,7 +2,7 @@ package handlers
 
 import (
 	"fmt"
-	"log"
+	"log/slog"
 	"net/http"
 	"strings"
 	"sync"
@@ -59,27 +59,27 @@ func (h *IngestHandler) IngestTickers(c echo.Context) error {
 		for i := range tickerFilter {
 			tickerFilter[i] = strings.TrimSpace(tickerFilter[i])
 		}
-		log.Printf("Starting ticker ingestion for: %v", tickerFilter)
+		slog.Info("starting ticker ingestion", "tickers", tickerFilter)
 	} else {
-		log.Println("Starting ticker ingestion (all tickers)...")
+		slog.Info("starting ticker ingestion for all tickers")
 	}
 
 	// Fetch tickers from API
 	tickers, err := h.client.FetchTickers(ctx, tickerFilter)
 	if err != nil {
-		log.Printf("Error fetching tickers: %v", err)
+		slog.Error("failed to fetch tickers", "error", err)
 		return c.JSON(http.StatusInternalServerError, IngestResponse{
 			Success: false,
 			Message: fmt.Sprintf("Failed to fetch tickers: %v", err),
 		})
 	}
 
-	log.Printf("Fetched %d tickers from API", len(tickers))
+	slog.Info("fetched tickers from API", "count", len(tickers))
 
 	// Upsert to database
 	count, err := h.repo.UpsertCompanies(ctx, tickers)
 	if err != nil {
-		log.Printf("Error upserting companies: %v", err)
+		slog.Error("failed to upsert companies", "error", err)
 		return c.JSON(http.StatusInternalServerError, IngestResponse{
 			Success: false,
 			Message: fmt.Sprintf("Failed to upsert companies: %v", err),
@@ -87,7 +87,7 @@ func (h *IngestHandler) IngestTickers(c echo.Context) error {
 	}
 
 	elapsed := time.Since(start)
-	log.Printf("Ticker ingestion complete: %d companies in %v", count, elapsed)
+	slog.Info("ticker ingestion complete", "companies", count, "elapsed", elapsed)
 
 	return c.JSON(http.StatusOK, IngestResponse{
 		Success: true,
@@ -153,7 +153,7 @@ func (h *IngestHandler) IngestFundamentals(c echo.Context) error {
 
 	fullFetch := c.QueryParam("full") == "true"
 
-	log.Printf("Starting fundamentals ingestion (tickers: %d, dimensions: %v, full: %v)...", len(tickerFilter), dimensions, fullFetch)
+	slog.Info("starting fundamentals ingestion", "ticker_count", len(tickerFilter), "dimensions", dimensions, "full_fetch", fullFetch)
 
 	// Check if we have companies first
 	companyCount, err := h.repo.GetCompanyCount(ctx)
@@ -183,7 +183,7 @@ func (h *IngestHandler) IngestFundamentals(c echo.Context) error {
 		var since time.Time
 		if !fullFetch {
 			since, _ = h.repo.GetLastSharadarUpdate(ctx, "financial_metrics")
-			log.Printf("Incremental fetch for %s since %v", dimension, since)
+			slog.Info("incremental fundamentals fetch", "dimension", dimension, "since", since)
 		}
 
 		// Stream batches with parallel API fetches (5 concurrent) and parallel upserts (3 concurrent)
@@ -197,7 +197,7 @@ func (h *IngestHandler) IngestFundamentals(c echo.Context) error {
 		for batch := range batchCh {
 			if batch.Error != nil {
 				fetchErr = batch.Error
-				log.Printf("Error fetching SF1 batch (%s): %v", dimension, batch.Error)
+				slog.Error("failed to fetch SF1 batch", "dimension", dimension, "error", batch.Error)
 				break
 			}
 
@@ -214,10 +214,10 @@ func (h *IngestHandler) IngestFundamentals(c echo.Context) error {
 
 				count, err := h.repo.UpsertFinancialMetrics(ctx, rows)
 				if err != nil {
-					log.Printf("Error upserting metrics batch (%s): %v", dimension, err)
+					slog.Error("failed to upsert metrics batch", "dimension", dimension, "error", err)
 				}
 				totalCount.Add(int64(count))
-				log.Printf("Upserted %d metrics for %s", count, dimension)
+				slog.Info("upserted metrics batch", "count", count, "dimension", dimension)
 			}(batch.Rows)
 		}
 
@@ -234,7 +234,7 @@ func (h *IngestHandler) IngestFundamentals(c echo.Context) error {
 
 	elapsed := time.Since(start)
 	count := int(totalCount.Load())
-	log.Printf("Fundamentals ingestion complete: %d metrics in %v", count, elapsed)
+	slog.Info("fundamentals ingestion complete", "metrics", count, "elapsed", elapsed)
 
 	return c.JSON(http.StatusOK, IngestResponse{
 		Success: true,
@@ -289,24 +289,24 @@ func (h *IngestHandler) IngestSP500(c echo.Context) error {
 	ctx := c.Request().Context()
 	start := time.Now()
 
-	log.Println("Starting S&P 500 membership ingestion...")
+	slog.Info("starting SP500 membership ingestion")
 
 	// Fetch full membership history from API
 	rows, err := h.client.FetchSP500History(ctx)
 	if err != nil {
-		log.Printf("Error fetching S&P 500 history: %v", err)
+		slog.Error("failed to fetch SP500 history", "error", err)
 		return c.JSON(http.StatusInternalServerError, IngestResponse{
 			Success: false,
 			Message: fmt.Sprintf("Failed to fetch S&P 500 history: %v", err),
 		})
 	}
 
-	log.Printf("Fetched %d S&P 500 membership records from API", len(rows))
+	slog.Info("fetched SP500 membership records from API", "count", len(rows))
 
 	// Upsert to database
 	count, err := h.repo.UpsertSP500Membership(ctx, rows)
 	if err != nil {
-		log.Printf("Error upserting S&P 500 membership: %v", err)
+		slog.Error("failed to upsert SP500 membership", "error", err)
 		return c.JSON(http.StatusInternalServerError, IngestResponse{
 			Success: false,
 			Message: fmt.Sprintf("Failed to upsert S&P 500 membership: %v", err),
@@ -314,7 +314,7 @@ func (h *IngestHandler) IngestSP500(c echo.Context) error {
 	}
 
 	elapsed := time.Since(start)
-	log.Printf("S&P 500 membership ingestion complete: %d records in %v", count, elapsed)
+	slog.Info("SP500 membership ingestion complete", "records", count, "elapsed", elapsed)
 
 	return c.JSON(http.StatusOK, IngestResponse{
 		Success: true,
@@ -364,7 +364,7 @@ func (h *IngestHandler) IngestBenchmark(c echo.Context) error {
 		})
 	}
 
-	log.Printf("Starting benchmark ingestion for: %v (hourly remaining: %d)", tickers, limits.HourlyRemaining)
+	slog.Info("starting benchmark ingestion", "tickers", tickers, "hourly_remaining", limits.HourlyRemaining)
 
 	var totalCount int
 	var skipped int
@@ -386,7 +386,7 @@ func (h *IngestHandler) IngestBenchmark(c echo.Context) error {
 
 		// If we have data from today or yesterday, skip (already up to date)
 		if lastDate.After(endDate.AddDate(0, 0, -2)) {
-			log.Printf("Benchmark %s already up to date (last: %s)", ticker, lastDate.Format("2006-01-02"))
+			slog.Info("benchmark already up to date", "ticker", ticker, "last_date", lastDate.Format("2006-01-02"))
 			skipped++
 			continue
 		}
@@ -397,7 +397,7 @@ func (h *IngestHandler) IngestBenchmark(c echo.Context) error {
 			startDate = time.Date(1993, 1, 1, 0, 0, 0, 0, time.UTC)
 		}
 
-		log.Printf("Fetching %s from %s to %s", ticker, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+		slog.Info("fetching benchmark prices", "ticker", ticker, "start", startDate.Format("2006-01-02"), "end", endDate.Format("2006-01-02"))
 
 		rows, err := h.tiingoClient.FetchDaily(ctx, ticker, startDate, endDate)
 		if err != nil {
@@ -412,7 +412,7 @@ func (h *IngestHandler) IngestBenchmark(c echo.Context) error {
 		}
 
 		totalCount += count
-		log.Printf("Ingested %d benchmark prices for %s", count, ticker)
+		slog.Info("ingested benchmark prices", "count", count, "ticker", ticker)
 	}
 
 	elapsed := time.Since(start)
@@ -520,13 +520,13 @@ func (h *IngestHandler) IngestPrices(c echo.Context) error {
 		// Get tickers that need price updates (no data or stale)
 		statuses, err := h.repo.GetTickersNeedingPriceUpdate(ctx, batchLimit, staleDays, retryDays)
 		if err != nil {
-			log.Printf("Error getting tickers needing update: %v", err)
+			slog.Error("failed to get tickers needing price update", "error", err)
 			return c.JSON(http.StatusInternalServerError, IngestResponse{
 				Success: false,
 				Message: fmt.Sprintf("Failed to get tickers: %v", err),
 			})
 		}
-		log.Printf("Found %d tickers needing price update", len(statuses))
+		slog.Info("found tickers needing price update", "count", len(statuses))
 		for _, s := range statuses {
 			tickersToFetch = append(tickersToFetch, tickerInfo{ticker: s.Ticker, lastDate: s.LastDate})
 		}
@@ -545,7 +545,7 @@ func (h *IngestHandler) IngestPrices(c echo.Context) error {
 		tickersToFetch = tickersToFetch[:limits.HourlyRemaining]
 	}
 
-	log.Printf("Starting price ingestion for %d tickers (hourly remaining: %d)", len(tickersToFetch), limits.HourlyRemaining)
+	slog.Info("starting price ingestion", "ticker_count", len(tickersToFetch), "hourly_remaining", limits.HourlyRemaining)
 
 	var totalCount int
 	var fetched int
@@ -556,7 +556,7 @@ func (h *IngestHandler) IngestPrices(c echo.Context) error {
 
 	for _, ti := range tickersToFetch {
 		if !h.tiingoClient.CanFetch(ti.ticker) {
-			log.Printf("Rate limit reached at ticker %s", ti.ticker)
+			slog.Warn("rate limit reached, stopping price ingestion", "ticker", ti.ticker)
 			break
 		}
 
@@ -566,7 +566,7 @@ func (h *IngestHandler) IngestPrices(c echo.Context) error {
 			startDate = time.Date(2010, 1, 1, 0, 0, 0, 0, time.UTC)
 		}
 
-		log.Printf("Fetching %s from %s to %s", ti.ticker, startDate.Format("2006-01-02"), endDate.Format("2006-01-02"))
+		slog.Info("fetching ticker prices", "ticker", ti.ticker, "start", startDate.Format("2006-01-02"), "end", endDate.Format("2006-01-02"))
 
 		rows, err := h.tiingoClient.FetchDaily(ctx, ti.ticker, startDate, endDate)
 		if err != nil {
@@ -582,7 +582,7 @@ func (h *IngestHandler) IngestPrices(c echo.Context) error {
 
 		if len(rows) == 0 {
 			// Tiingo returned 200 but no data - ticker not available in their database
-			log.Printf("No price data available for %s (ticker may not be supported by Tiingo)", ti.ticker)
+			slog.Info("no price data available from Tiingo", "ticker", ti.ticker)
 			noDataCount++
 			continue
 		}
@@ -595,13 +595,13 @@ func (h *IngestHandler) IngestPrices(c echo.Context) error {
 
 		totalCount += count
 		fetched++
-		log.Printf("Ingested %d prices for %s (%d/%d)", count, ti.ticker, fetched, len(tickersToFetch))
+		slog.Info("ingested ticker prices", "count", count, "ticker", ti.ticker, "fetched", fetched, "total", len(tickersToFetch))
 	}
 
 	// Mark all attempted tickers so we don't retry them immediately
 	if len(attemptedTickers) > 0 {
 		if err := h.repo.MarkPriceFetchAttempted(ctx, attemptedTickers); err != nil {
-			log.Printf("Error marking tickers as attempted: %v", err)
+			slog.Error("failed to mark tickers as attempted", "error", err)
 		}
 	}
 
