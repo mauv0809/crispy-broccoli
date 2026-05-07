@@ -6,6 +6,11 @@ on:
   push:
     branches: [main]
 
+# Default GITHUB_TOKEN gives write access to the repo; none of these
+# jobs publish anything or comment on PRs, so scope down to read-only.
+permissions:
+  contents: read
+
 env:
   GO_VERSION: "1.24"
 
