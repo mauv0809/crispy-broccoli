@@ -43,22 +43,20 @@ func main() {
 		log.Fatal("DATABASE_URL environment variable is required")
 	}
 
-	// Run migrations
+	// Run migrations. Fail fast on error: an HTTP server with a broken
+	// or stale schema is worse than a restart loop.
 	if err := db.RunMigrations(databaseURL); err != nil {
-		log.Printf("Warning: Could not run migrations: %v", err)
-	} else {
-		log.Println("Migrations completed")
+		log.Fatalf("migrations failed: %v", err)
 	}
+	log.Println("Migrations completed")
 
-	// Connect to database
+	// Connect to database. Fail fast: same reasoning as migrations.
 	pool, err := db.Connect(ctx, databaseURL)
 	if err != nil {
-		log.Printf("Warning: Could not connect to database: %v", err)
-		log.Println("Continuing without database connection...")
-	} else {
-		defer pool.Close()
-		log.Println("Connected to database")
+		log.Fatalf("database connect failed: %v", err)
 	}
+	defer pool.Close()
+	log.Println("Connected to database")
 
 	// Setup Echo
 	e := echo.New()
@@ -82,48 +80,46 @@ func main() {
 	handlers.SetBuildInfo(buildSHA, buildTime)
 	h := handlers.New(pool)
 
-	// Setup repository and ingest client (if database is available)
+	// Setup repository and ingest client
 	var ingestHandler *handlers.IngestHandler
 	var strategyHandler *handlers.StrategyHandler
-	if pool != nil {
-		repo := db.NewRepository(pool)
+	repo := db.NewRepository(pool)
 
-		// Setup Nasdaq Data Link client (for SEP equity prices and fundamentals)
-		var nasdaqClient *ingest.Client
-		nasdaqAPIKey := os.Getenv("NASDAQ_API_KEY")
-		if nasdaqAPIKey != "" {
-			nasdaqClient = ingest.NewClient(nasdaqAPIKey)
-			log.Println("Nasdaq Data Link client initialized (SEP for equity prices)")
-		} else {
-			log.Println("Warning: NASDAQ_API_KEY not set, Nasdaq data endpoints disabled")
-		}
+	// Setup Nasdaq Data Link client (for SEP equity prices and fundamentals)
+	var nasdaqClient *ingest.Client
+	nasdaqAPIKey := os.Getenv("NASDAQ_API_KEY")
+	if nasdaqAPIKey != "" {
+		nasdaqClient = ingest.NewClient(nasdaqAPIKey)
+		log.Println("Nasdaq Data Link client initialized (SEP for equity prices)")
+	} else {
+		log.Println("Warning: NASDAQ_API_KEY not set, Nasdaq data endpoints disabled")
+	}
 
-		// Setup Tiingo client (for ETF benchmark prices - SPY, QQQ, etc.)
-		var tiingoClient *ingest.TiingoClient
-		tiingoAPIKey := os.Getenv("TIINGO_API_KEY")
-		if tiingoAPIKey != "" {
-			tiingoClient = ingest.NewTiingoClient(tiingoAPIKey)
-			log.Println("Tiingo client initialized (for ETF benchmarks and stock prices)")
-		} else {
-			log.Println("Warning: TIINGO_API_KEY not set, ETF benchmark comparison disabled")
-		}
+	// Setup Tiingo client (for ETF benchmark prices - SPY, QQQ, etc.)
+	var tiingoClient *ingest.TiingoClient
+	tiingoAPIKey := os.Getenv("TIINGO_API_KEY")
+	if tiingoAPIKey != "" {
+		tiingoClient = ingest.NewTiingoClient(tiingoAPIKey)
+		log.Println("Tiingo client initialized (for ETF benchmarks and stock prices)")
+	} else {
+		log.Println("Warning: TIINGO_API_KEY not set, ETF benchmark comparison disabled")
+	}
 
-		// Setup ingest handler (needs both clients)
-		if nasdaqClient != nil {
-			ingestHandler = handlers.NewIngestHandler(nasdaqClient, tiingoClient, repo)
-		}
+	// Setup ingest handler (needs both clients)
+	if nasdaqClient != nil {
+		ingestHandler = handlers.NewIngestHandler(nasdaqClient, tiingoClient, repo)
+	}
 
-		// Setup strategy handler with backtester
-		strategyRepo := strategy.NewRepository(pool)
-		strategyExecutor := strategy.NewExecutor(pool)
-		backtester := strategy.NewBacktester(strategyExecutor, repo, nasdaqClient, tiingoClient)
-		strategyHandler = handlers.NewStrategyHandler(strategyRepo, strategyExecutor, backtester)
-		log.Println("Strategy engine initialized")
+	// Setup strategy handler with backtester
+	strategyRepo := strategy.NewRepository(pool)
+	strategyExecutor := strategy.NewExecutor(pool)
+	backtester := strategy.NewBacktester(strategyExecutor, repo, nasdaqClient, tiingoClient)
+	strategyHandler = handlers.NewStrategyHandler(strategyRepo, strategyExecutor, backtester)
+	log.Println("Strategy engine initialized")
 
-		// Seed default strategies
-		if err := strategy.SeedDefaultStrategies(ctx, pool); err != nil {
-			log.Printf("Warning: failed to seed default strategies: %v", err)
-		}
+	// Seed default strategies
+	if err := strategy.SeedDefaultStrategies(ctx, pool); err != nil {
+		log.Printf("Warning: failed to seed default strategies: %v", err)
 	}
 
 	// Static files
