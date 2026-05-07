@@ -3,7 +3,11 @@ package main
 import (
 	"context"
 	"log"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
+	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
@@ -182,8 +186,24 @@ func main() {
 		port = "8080"
 	}
 
-	log.Printf("Starting server on :%s", port)
-	if err := e.Start(":" + port); err != nil {
-		log.Fatalf("Failed to start server: %v", err)
+	// Start server in a goroutine so we can listen for shutdown signals.
+	go func() {
+		log.Printf("Starting server on :%s", port)
+		if err := e.Start(":" + port); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("server error: %v", err)
+		}
+	}()
+
+	// Wait for SIGINT or SIGTERM. Coolify sends SIGTERM on redeploy.
+	sigCh := make(chan os.Signal, 1)
+	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
+	<-sigCh
+	log.Println("shutdown signal received, draining...")
+
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	if err := e.Shutdown(shutdownCtx); err != nil {
+		log.Printf("graceful shutdown error: %v", err)
 	}
+	log.Println("server stopped")
 }
