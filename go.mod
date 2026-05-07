@@ -4,6 +4,8 @@ go 1.24.4
 
 require (
 	github.com/a-h/templ v0.3.960
+	github.com/alexedwards/scs/postgresstore v0.0.0-20251002162104-209de6e426de
+	github.com/alexedwards/scs/v2 v2.9.0
 	github.com/getsentry/sentry-go v0.45.1
 	github.com/jackc/pgx/v5 v5.7.6
 	github.com/joho/godotenv v1.5.1
