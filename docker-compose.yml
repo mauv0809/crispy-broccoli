@@ -8,7 +8,10 @@ services:
       POSTGRES_PASSWORD: value_pass
       POSTGRES_DB: value_db
     volumes:
-      - pgdata:/var/lib/postgresql/data
+      # Postgres 18+ stores data in a major-version-specific subdirectory
+      # of /var/lib/postgresql (e.g. /var/lib/postgresql/18/docker), so the
+      # mount needs to be on the parent dir, not /var/lib/postgresql/data.
+      - pgdata:/var/lib/postgresql
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U value_user -d value_db"]
       interval: 5s
