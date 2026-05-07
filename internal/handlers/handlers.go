@@ -3,16 +3,19 @@ package handlers
 import (
 	"net/http"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
 	"github.com/mauv0809/crispy-broccoli/internal/views"
 )
 
 type Handler struct {
-	// Add dependencies here (e.g., db pool, services)
+	pool *pgxpool.Pool
 }
 
-func New() *Handler {
-	return &Handler{}
+// New constructs a Handler. pool may be nil — the Health handler
+// reports unhealthy if the pool is nil or the ping fails.
+func New(pool *pgxpool.Pool) *Handler {
+	return &Handler{pool: pool}
 }
 
 // Health returns application health status

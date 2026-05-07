@@ -79,7 +79,7 @@ func main() {
 	e.Use(middleware.Recover())
 
 	// Setup handlers
-	h := handlers.New()
+	h := handlers.New(pool)
 
 	// Setup repository and ingest client (if database is available)
 	var ingestHandler *handlers.IngestHandler
