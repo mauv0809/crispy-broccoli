@@ -8,7 +8,6 @@ on:
 
 env:
   GO_VERSION: "1.24"
-  NODE_VERSION: "22"
 
 jobs:
   lint:
@@ -48,24 +47,6 @@ jobs:
         run: |
           if ! git diff --exit-code; then
             echo "::error::Committed generated Go files are stale. Run 'make tools && templ generate && swag init -g cmd/app/main.go --parseDependency --parseInternal' locally and commit the result."
-            exit 1
-          fi
-
-  generated-css-fresh:
-    name: generated-css-fresh
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-      - run: npm ci
-      - run: npm run css:build
-      - name: assert no diff
-        run: |
-          if ! git diff --exit-code -- assets/css/output.css; then
-            echo "::error::Committed Tailwind output is stale. Run 'npm ci && npm run css:build' locally and commit assets/css/output.css."
             exit 1
           fi
 

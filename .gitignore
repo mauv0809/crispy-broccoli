@@ -39,3 +39,8 @@ bin/
 tmp/
 pgdata/
 node_modules/
+
+# Generated CSS — built by Dockerfile (css stage) and locally by `npm run
+# css:build`. Tailwind v4's output is platform-specific, so committing it
+# would create CI drift; keep it out of git and rebuild on demand.
+assets/css/output.css
