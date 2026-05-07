@@ -150,7 +150,7 @@ func main() {
 
 	// Serve OpenAPI spec directly
 	e.GET("/api/openapi.json", func(c echo.Context) error {
-		return c.JSONBlob(200, []byte(docs.SwaggerInfo.ReadDoc()))
+		return c.JSONBlob(http.StatusOK, []byte(docs.SwaggerInfo.ReadDoc()))
 	})
 
 	// Strategy API routes
