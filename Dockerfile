@@ -46,4 +46,11 @@ COPY --from=builder /src/assets /app/assets
 
 EXPOSE 8080
 USER nonroot:nonroot
+
+# Distroless has no curl/wget, so the binary probes itself. The flag
+# short-circuits before DB or logger setup, so the probe is fast and
+# side-effect-free. PORT is read from the env at probe time.
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD ["/app/app", "--healthcheck"]
+
 ENTRYPOINT ["/app/app"]

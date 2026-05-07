@@ -47,7 +47,27 @@ func main() {
 	addUserEmail := flag.String("add-user", "", "Add a user with the given email and exit")
 	disableUserEmail := flag.String("disable-user", "", "Disable the user with the given email and exit")
 	addUserAdmin := flag.Bool("admin", false, "When used with --add-user, mark the user as an admin")
+	healthcheck := flag.Bool("healthcheck", false, "Probe http://127.0.0.1:$PORT/health and exit 0/1; used by the Dockerfile HEALTHCHECK")
 	flag.Parse()
+
+	// Healthcheck short-circuits before logger/DB/migrations so the probe is
+	// fast, side-effect-free, and doesn't take a DB connection slot.
+	if *healthcheck {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		resp, err := (&http.Client{Timeout: 3 * time.Second}).
+			Get("http://127.0.0.1:" + port + "/health")
+		if err != nil {
+			os.Exit(1)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		return
+	}
 
 	env := os.Getenv("ENV")
 	if env == "" {
