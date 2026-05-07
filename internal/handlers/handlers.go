@@ -7,30 +7,19 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/mauv0809/crispy-broccoli/internal/buildinfo"
 	"github.com/mauv0809/crispy-broccoli/internal/views"
 )
 
 type Handler struct {
-	pool *pgxpool.Pool
+	pool  *pgxpool.Pool
+	build buildinfo.Info
 }
 
 // New constructs a Handler. pool may be nil — the Health handler
 // reports unhealthy if the pool is nil or the ping fails.
-func New(pool *pgxpool.Pool) *Handler {
-	return &Handler{pool: pool}
-}
-
-// BuildSHA and BuildTime are populated from main at startup.
-// They mirror the ldflags-injected values; main calls SetBuildInfo.
-var (
-	BuildSHA  = "dev"
-	BuildTime = "unknown"
-)
-
-// SetBuildInfo lets cmd/app/main wire build metadata into the handlers package.
-func SetBuildInfo(sha, ts string) {
-	BuildSHA = sha
-	BuildTime = ts
+func New(pool *pgxpool.Pool, build buildinfo.Info) *Handler {
+	return &Handler{pool: pool, build: build}
 }
 
 // Health returns 200 when the database is reachable, 503 otherwise.
@@ -43,8 +32,8 @@ func SetBuildInfo(sha, ts string) {
 // @Router /health [get]
 func (h *Handler) Health(c echo.Context) error {
 	resp := map[string]any{
-		"build_sha":  BuildSHA,
-		"build_time": BuildTime,
+		"build_sha":  h.build.SHA,
+		"build_time": h.build.Time,
 	}
 	if h.pool == nil {
 		resp["status"] = "unhealthy"

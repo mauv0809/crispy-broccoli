@@ -9,11 +9,12 @@ import (
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/labstack/echo/v4"
+	"github.com/mauv0809/crispy-broccoli/internal/buildinfo"
 )
 
 func TestHealth_NilPool_Returns503(t *testing.T) {
 	e := echo.New()
-	h := New(nil)
+	h := New(nil, buildinfo.Info{})
 
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
@@ -50,7 +51,7 @@ func TestHealth_ClosedPool_Returns503(t *testing.T) {
 	pool.Close()
 
 	e := echo.New()
-	h := New(pool)
+	h := New(pool, buildinfo.Info{})
 	req := httptest.NewRequest(http.MethodGet, "/health", nil)
 	rec := httptest.NewRecorder()
 	c := e.NewContext(req, rec)

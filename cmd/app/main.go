@@ -12,6 +12,7 @@ import (
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/mauv0809/crispy-broccoli/internal/buildinfo"
 	"github.com/mauv0809/crispy-broccoli/internal/db"
 	"github.com/mauv0809/crispy-broccoli/internal/handlers"
 	"github.com/mauv0809/crispy-broccoli/internal/ingest"
@@ -95,8 +96,7 @@ func main() {
 	e.Use(middleware.Recover())
 
 	// Setup handlers
-	handlers.SetBuildInfo(buildSHA, buildTime)
-	h := handlers.New(pool)
+	h := handlers.New(pool, buildinfo.Info{SHA: buildSHA, Time: buildTime})
 
 	// Setup repository and ingest client
 	var ingestHandler *handlers.IngestHandler
