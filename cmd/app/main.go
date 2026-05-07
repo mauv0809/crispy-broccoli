@@ -79,6 +79,7 @@ func main() {
 	e.Use(middleware.Recover())
 
 	// Setup handlers
+	handlers.SetBuildInfo(buildSHA, buildTime)
 	h := handlers.New(pool)
 
 	// Setup repository and ingest client (if database is available)
