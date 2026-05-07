@@ -139,6 +139,16 @@ All jobs use `actions/setup-go@v5` with `cache: true` and the standard module ca
 - On webhook fire: Coolify pulls, builds the Dockerfile, deploys
 - On build failure inside Coolify: previous container keeps running (no downtime)
 
+### Tool version pinning
+
+The `generated-*-fresh` jobs work by re-running code generators and asserting `git diff` is empty. They will produce false-positive failures if a local developer ran a generator with a different version than CI uses. To prevent drift:
+
+- **Go tooling versions are declared in a single source of truth: `tools.go`** (a build-tagged file at the repo root) listing `_ "github.com/a-h/templ/cmd/templ"` and `_ "github.com/swaggo/swag/cmd/swag"`. Versions are then locked in `go.mod` like any other dependency. CI installs them via `go install <tool>@<version-from-go.mod>` (using `go run` or `go install` against the module-pinned version), and the `Makefile`'s existing `tools` target is updated to use the same pinned versions.
+- **Node tooling versions are pinned via `package.json`** + `package-lock.json`. CI uses `npm ci` (already in the spec) which respects the lock file. Tailwind, postcss, and any plugins are locked there.
+- **The README gains a short "Tooling versions" subsection** documenting how to update a tool: bump in `tools.go` (or `package.json`), regenerate, commit. Single workflow for both contributors and CI.
+
+Effect: CI and local both `go install` (or `npm ci`) the same exact version, so generator output is byte-identical. The drift mode is closed.
+
 ### Out of scope (deliberately)
 
 No deploy step in GitHub Actions. No Docker build/push from CI. No release tagging or changelog automation. No security scanning workflow (Dependabot can be enabled via GitHub UI without a workflow file).
@@ -407,5 +417,4 @@ The plan skill will produce the actual sequenced steps. As a sanity check that t
 - **Single VPS, no redundancy.** Standard for this scale; not addressed.
 - **Sessions not invalidated on disable.** When `is_active` is flipped to false, existing sessions die on the next request (because middleware re-loads the user). A session that never makes another request technically remains valid until expiry. Acceptable for trusted-user model.
 - **scs sessions stored in Postgres.** A DB outage takes down auth. Same DB the app already depends on, so blast radius is unchanged.
-- **`generated-*-fresh` CI jobs may be flaky** if local templ/swag versions drift from CI versions. Pin tool versions in CI and document the version in the README to mitigate.
 - **OAuth redirect URI is environment-specific.** Local dev (`http://localhost:8080/auth/google/callback`) and prod must both be registered in Google Cloud Console. Standard OAuth pain.
