@@ -45,6 +45,13 @@ func main() {
 	})
 	slog.SetDefault(logger)
 
+	sentryCleanup, sentryEnabled := observability.InitSentry(
+		os.Getenv("SENTRY_DSN"),
+		env,
+		buildSHA,
+	)
+	defer sentryCleanup()
+
 	// Load .env file if it exists (local dev)
 	if err := godotenv.Load(); err != nil {
 		slog.Info("no .env file found, using environment variables")
@@ -82,6 +89,7 @@ func main() {
 	e.HidePort = true
 	e.Use(observability.RequestIDMiddleware())
 	e.Use(observability.RequestLoggerMiddleware(logger))
+	e.Use(observability.SentryErrorMiddleware(sentryEnabled))
 	e.Use(middleware.Recover())
 
 	// Setup handlers
