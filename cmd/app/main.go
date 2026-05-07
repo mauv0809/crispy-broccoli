@@ -89,6 +89,8 @@ func main() {
 	e.HidePort = true
 	e.Use(observability.RequestIDMiddleware())
 	e.Use(observability.RequestLoggerMiddleware(logger))
+	e.Use(middleware.Secure())
+	e.Use(middleware.BodyLimit("1M"))
 	e.Use(observability.SentryErrorMiddleware(sentryEnabled))
 	e.Use(middleware.Recover())
 
