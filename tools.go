@@ -8,6 +8,6 @@
 package tools
 
 import (
-	_ "github.com/a-h/templ"
-	_ "github.com/swaggo/swag"
+	_ "github.com/a-h/templ/cmd/templ"
+	_ "github.com/swaggo/swag/cmd/swag"
 )

@@ -2,23 +2,30 @@ package main
 
 import (
 	"context"
+	"database/sql"
+	"encoding/hex"
+	"flag"
 	"log/slog"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 	"time"
 
 	"github.com/joho/godotenv"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
+	"github.com/markbates/goth/gothic"
 
+	"github.com/mauv0809/crispy-broccoli/internal/auth"
 	"github.com/mauv0809/crispy-broccoli/internal/buildinfo"
 	"github.com/mauv0809/crispy-broccoli/internal/db"
 	"github.com/mauv0809/crispy-broccoli/internal/handlers"
 	"github.com/mauv0809/crispy-broccoli/internal/ingest"
 	"github.com/mauv0809/crispy-broccoli/internal/observability"
 	"github.com/mauv0809/crispy-broccoli/internal/strategy"
+	"github.com/mauv0809/crispy-broccoli/internal/users"
 
 	"github.com/mauv0809/crispy-broccoli/docs"
 )
@@ -37,6 +44,31 @@ var (
 // @BasePath /
 
 func main() {
+	addUserEmail := flag.String("add-user", "", "Add a user with the given email and exit")
+	disableUserEmail := flag.String("disable-user", "", "Disable the user with the given email and exit")
+	addUserAdmin := flag.Bool("admin", false, "When used with --add-user, mark the user as an admin")
+	healthcheck := flag.Bool("healthcheck", false, "Probe http://127.0.0.1:$PORT/health and exit 0/1; used by the Dockerfile HEALTHCHECK")
+	flag.Parse()
+
+	// Healthcheck short-circuits before logger/DB/migrations so the probe is
+	// fast, side-effect-free, and doesn't take a DB connection slot.
+	if *healthcheck {
+		port := os.Getenv("PORT")
+		if port == "" {
+			port = "8080"
+		}
+		resp, err := (&http.Client{Timeout: 3 * time.Second}).
+			Get("http://127.0.0.1:" + port + "/health")
+		if err != nil {
+			os.Exit(1)
+		}
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			os.Exit(1)
+		}
+		return
+	}
+
 	env := os.Getenv("ENV")
 	if env == "" {
 		env = "development"
@@ -85,6 +117,70 @@ func main() {
 	defer pool.Close()
 	slog.Info("database connected")
 
+	usersRepo := users.NewRepository(pool)
+
+	// CLI short-circuit: provisioning commands don't need to start the HTTP server.
+	if *addUserEmail != "" {
+		if err := users.AddUser(ctx, usersRepo, *addUserEmail, *addUserAdmin); err != nil {
+			slog.Error("add-user failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+	if *disableUserEmail != "" {
+		if err := users.DisableUser(ctx, usersRepo, *disableUserEmail); err != nil {
+			slog.Error("disable-user failed", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
+
+	// Sessions: scs uses database/sql, not pgx. Open a small companion pool.
+	sqlDB, err := sql.Open("pgx", databaseURL)
+	if err != nil {
+		slog.Error("session db open failed", "error", err)
+		os.Exit(1)
+	}
+	defer sqlDB.Close()
+	sessionManager := auth.NewSessionManager(sqlDB)
+	sessionManager.Cookie.Secure = env == "production"
+
+	// Gothic store (for the short-lived OAuth state cookie).
+	sessionKeyHex := os.Getenv("SESSION_KEY")
+	if env == "production" && sessionKeyHex == "" {
+		slog.Error("SESSION_KEY required in production")
+		os.Exit(1)
+	}
+	sessionKey, err := hex.DecodeString(sessionKeyHex)
+	if err != nil || len(sessionKey) < 32 {
+		if env == "production" {
+			slog.Error("SESSION_KEY must be hex-encoded and at least 32 bytes")
+			os.Exit(1)
+		}
+		// dev fallback: stable per-process random key
+		sessionKey = []byte("dev-session-key-not-for-production-use")
+	}
+	gothic.Store = auth.NewGothicStore(sessionKey, env == "production")
+
+	// Google OAuth provider.
+	if cid, csec := os.Getenv("GOOGLE_CLIENT_ID"), os.Getenv("GOOGLE_CLIENT_SECRET"); cid != "" && csec != "" {
+		if err := auth.RegisterGoogle(auth.GoogleConfig{
+			ClientID:     cid,
+			ClientSecret: csec,
+			BaseURL:      os.Getenv("BASE_URL"),
+		}); err != nil {
+			slog.Error("google oauth init failed", "error", err)
+			os.Exit(1)
+		}
+		slog.Info("google oauth provider registered")
+	} else {
+		slog.Warn("google oauth disabled; GOOGLE_CLIENT_ID/SECRET not set")
+	}
+
+	googleHandler := auth.NewGoogleHandler(sessionManager, usersRepo)
+	authMiddleware := auth.RequireAuth(auth.NewSession(sessionManager), auth.NewLoader(usersRepo))
+	adminMiddleware := auth.RequireAdmin()
+
 	// Setup Echo
 	e := echo.New()
 	e.HideBanner = true
@@ -95,6 +191,26 @@ func main() {
 	e.Use(middleware.BodyLimit("1M"))
 	e.Use(observability.SentryErrorMiddleware(sentryEnabled))
 	e.Use(middleware.Recover())
+	e.Use(auth.SessionMiddleware(sessionManager))
+	e.Use(middleware.CSRFWithConfig(middleware.CSRFConfig{
+		TokenLookup:    "header:X-CSRF-Token,form:_csrf",
+		CookieName:     "_csrf",
+		CookiePath:     "/",
+		CookieHTTPOnly: false, // JS needs to read it indirectly via meta tag
+		CookieSameSite: http.SameSiteLaxMode,
+		CookieSecure:   env == "production",
+		Skipper: func(c echo.Context) bool {
+			p := c.Request().URL.Path
+			switch {
+			case p == "/health",
+				p == "/api/openapi.json",
+				strings.HasPrefix(p, "/assets/"),
+				strings.HasPrefix(p, "/auth/"):
+				return true
+			}
+			return false
+		},
+	}))
 
 	// Setup handlers
 	h := handlers.New(pool, buildinfo.Info{SHA: buildSHA, Time: buildTime})
@@ -143,11 +259,12 @@ func main() {
 
 	// Static files
 	e.Static("/assets", "assets")
+	googleHandler.Mount(e)
 
 	// Routes
 	e.GET("/health", h.Health)
-	e.GET("/", h.Index)
-	e.GET("/docs", h.Docs)
+	e.GET("/", h.Index, authMiddleware)
+	e.GET("/docs", h.Docs, authMiddleware)
 
 	// Serve OpenAPI spec directly
 	e.GET("/api/openapi.json", func(c echo.Context) error {
@@ -157,7 +274,7 @@ func main() {
 	// Strategy API routes
 	if strategyHandler != nil {
 		// JSON API endpoints
-		api := e.Group("/api")
+		api := e.Group("/api", authMiddleware)
 		api.GET("/strategies", strategyHandler.ListStrategies)
 		api.POST("/strategies", strategyHandler.CreateStrategy)
 		api.POST("/strategies/preview", strategyHandler.PreviewStrategy)
@@ -172,10 +289,10 @@ func main() {
 		api.GET("/strategy-fields", strategyHandler.GetStrategyFields)
 
 		// HTML Page routes
-		e.GET("/strategies", strategyHandler.StrategiesPage)
-		e.GET("/strategies/new", strategyHandler.NewStrategyPage)
-		e.GET("/strategies/:id", strategyHandler.StrategyDetailPage)
-		e.GET("/strategies/:id/edit", strategyHandler.EditStrategyPage)
+		e.GET("/strategies", strategyHandler.StrategiesPage, authMiddleware)
+		e.GET("/strategies/new", strategyHandler.NewStrategyPage, authMiddleware)
+		e.GET("/strategies/:id", strategyHandler.StrategyDetailPage, authMiddleware)
+		e.GET("/strategies/:id/edit", strategyHandler.EditStrategyPage, authMiddleware)
 
 		// Dashboard API (returns HTML fragments for HTMX)
 		api.GET("/dashboard/strategies", strategyHandler.DashboardStrategies)
@@ -185,7 +302,7 @@ func main() {
 
 	// Admin routes for data ingestion (Sharadar - fundamentals only)
 	if ingestHandler != nil {
-		admin := e.Group("/admin")
+		admin := e.Group("/admin", authMiddleware, adminMiddleware)
 		admin.GET("/ingest/status", ingestHandler.IngestStatus)
 		admin.POST("/ingest/tickers", ingestHandler.IngestTickers)
 		admin.POST("/ingest/fundamentals", ingestHandler.IngestFundamentals)

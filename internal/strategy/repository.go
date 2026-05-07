@@ -19,8 +19,8 @@ func NewRepository(pool *pgxpool.Pool) *Repository {
 	return &Repository{pool: pool}
 }
 
-// Create inserts a new strategy and returns the created strategy
-func (r *Repository) Create(ctx context.Context, req CreateStrategyRequest) (*Strategy, error) {
+// Create inserts a new strategy authored by the given user.
+func (r *Repository) Create(ctx context.Context, req CreateStrategyRequest, createdBy int64) (*Strategy, error) {
 	rulesJSON, err := json.Marshal(req.Rules)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling rules: %w", err)
@@ -28,16 +28,15 @@ func (r *Repository) Create(ctx context.Context, req CreateStrategyRequest) (*St
 
 	var s Strategy
 	err = r.pool.QueryRow(ctx, `
-		INSERT INTO strategies (name, description, rules, is_default, created_at, updated_at)
-		VALUES ($1, $2, $3, false, NOW(), NOW())
+		INSERT INTO strategies (name, description, rules, is_default, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, false, $4, NOW(), NOW())
 		RETURNING id, name, description, rules, is_default, created_at, updated_at
-	`, req.Name, req.Description, rulesJSON).Scan(
+	`, req.Name, req.Description, rulesJSON, createdBy).Scan(
 		&s.ID, &s.Name, &s.Description, &s.Rules, &s.IsDefault, &s.CreatedAt, &s.UpdatedAt,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("creating strategy: %w", err)
 	}
-
 	return &s, nil
 }
 
@@ -119,22 +118,21 @@ func (r *Repository) Delete(ctx context.Context, id int) error {
 	return nil
 }
 
-// SaveRun saves a strategy execution run
-func (r *Repository) SaveRun(ctx context.Context, run *StrategyRun) error {
+// SaveRun saves a strategy execution run authored by the given user.
+func (r *Repository) SaveRun(ctx context.Context, run *StrategyRun, createdBy int64) error {
 	resultsJSON, err := json.Marshal(run.Results)
 	if err != nil {
 		return fmt.Errorf("marshaling results: %w", err)
 	}
 
 	err = r.pool.QueryRow(ctx, `
-		INSERT INTO strategy_runs (strategy_id, run_at, results, execution_time_ms, stocks_screened, stocks_matched)
-		VALUES ($1, $2, $3, $4, $5, $6)
+		INSERT INTO strategy_runs (strategy_id, run_at, results, execution_time_ms, stocks_screened, stocks_matched, created_by)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id
-	`, run.StrategyID, run.RunAt, resultsJSON, run.ExecutionTimeMs, run.StocksScreened, run.StocksMatched).Scan(&run.ID)
+	`, run.StrategyID, run.RunAt, resultsJSON, run.ExecutionTimeMs, run.StocksScreened, run.StocksMatched, createdBy).Scan(&run.ID)
 	if err != nil {
 		return fmt.Errorf("saving strategy run: %w", err)
 	}
-
 	return nil
 }
 
@@ -212,10 +210,13 @@ func (r *Repository) CreateDefaultStrategy(ctx context.Context, name, descriptio
 		return nil, fmt.Errorf("marshaling rules: %w", err)
 	}
 
+	// Owned by the synthetic system user (inserted by migration 015) so the
+	// NOT NULL FK constraint is satisfied without coupling seeding to a real
+	// authenticated user.
 	var s Strategy
 	err = r.pool.QueryRow(ctx, `
-		INSERT INTO strategies (name, description, rules, is_default, created_at, updated_at)
-		VALUES ($1, $2, $3, true, NOW(), NOW())
+		INSERT INTO strategies (name, description, rules, is_default, created_by, created_at, updated_at)
+		VALUES ($1, $2, $3, true, (SELECT id FROM users WHERE email = 'system@deepvalue.local'), NOW(), NOW())
 		ON CONFLICT DO NOTHING
 		RETURNING id, name, description, rules, is_default, created_at, updated_at
 	`, name, description, rulesJSON).Scan(
