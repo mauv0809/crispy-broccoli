@@ -7,6 +7,7 @@ import (
 
 	"github.com/labstack/echo/v4"
 
+	"github.com/mauv0809/crispy-broccoli/internal/auth"
 	"github.com/mauv0809/crispy-broccoli/internal/strategy"
 	"github.com/mauv0809/crispy-broccoli/internal/views"
 )
@@ -27,6 +28,18 @@ func NewStrategyHandler(repo *strategy.Repository, executor *strategy.Executor, 
 		validator:  strategy.NewValidator(),
 		backtester: backtester,
 	}
+}
+
+// currentUserID returns the authenticated user's ID as a pointer suitable
+// for nullable created_by columns. Returns nil if no user is on context
+// (should not happen behind RequireAuth, but defensive — the column is
+// nullable so a nil insert is fine).
+func currentUserID(c echo.Context) *int64 {
+	if u := auth.UserFromContext(c); u != nil {
+		id := u.ID
+		return &id
+	}
+	return nil
 }
 
 // ListStrategies returns all strategies
@@ -101,7 +114,7 @@ func (h *StrategyHandler) CreateStrategy(c echo.Context) error {
 		})
 	}
 
-	s, err := h.repo.Create(c.Request().Context(), req)
+	s, err := h.repo.Create(c.Request().Context(), req, currentUserID(c))
 	if err != nil {
 		return c.JSON(http.StatusInternalServerError, map[string]string{
 			"error": "Failed to create strategy",
@@ -223,7 +236,7 @@ func (h *StrategyHandler) RunStrategy(c echo.Context) error {
 		StocksScreened:  result.StocksScreened,
 		StocksMatched:   result.StocksMatched,
 	}
-	if err := h.repo.SaveRun(c.Request().Context(), run); err != nil {
+	if err := h.repo.SaveRun(c.Request().Context(), run, currentUserID(c)); err != nil {
 		// Log but don't fail the request
 		c.Logger().Warnf("Failed to save strategy run: %v", err)
 	}
@@ -429,7 +442,7 @@ func (h *StrategyHandler) RunStrategyHTMX(c echo.Context) error {
 		StocksScreened:  result.StocksScreened,
 		StocksMatched:   result.StocksMatched,
 	}
-	_ = h.repo.SaveRun(c.Request().Context(), run)
+	_ = h.repo.SaveRun(c.Request().Context(), run, currentUserID(c))
 
 	return Render(c, http.StatusOK, views.ExecutionResults(*result))
 }
