@@ -168,3 +168,53 @@ func (h *Holdings) ListByPortfolio(ctx context.Context, portfolioID int64) ([]Ho
 	}
 	return out, nil
 }
+
+// Rebuild recomputes the holdings projection for a portfolio by replaying
+// executed_trades in order. Wipes existing holdings rows for the portfolio
+// first, then calls ApplyTrade for each trade. Idempotent — running twice
+// produces the same projection.
+//
+// Cheap because the trade ledger is sparse (a few rows per quarter per
+// portfolio). Used as a sanity check / manual repair tool; not called on the
+// hot path.
+func (h *Holdings) Rebuild(ctx context.Context, db dbutil.DBTX, portfolioID int64) error {
+	if _, err := db.Exec(ctx,
+		`DELETE FROM holdings WHERE portfolio_id = $1`, portfolioID); err != nil {
+		return fmt.Errorf("clearing holdings for rebuild: %w", err)
+	}
+
+	rows, err := db.Query(ctx, `
+		SELECT ticker, action, shares, price, fee, executed_at
+		FROM executed_trades
+		WHERE portfolio_id = $1
+		ORDER BY executed_at ASC, id ASC
+	`, portfolioID)
+	if err != nil {
+		return fmt.Errorf("reading trade ledger for rebuild: %w", err)
+	}
+
+	// Read all trades into a slice before closing the iterator so that
+	// subsequent ApplyTrade calls (which issue their own queries) don't
+	// compete for the same connection.
+	var trades []TradeApplication
+	for rows.Next() {
+		t := TradeApplication{PortfolioID: portfolioID}
+		if err := rows.Scan(&t.Ticker, &t.Action, &t.Shares, &t.Price, &t.Fee, &t.ExecutedAt); err != nil {
+			rows.Close()
+			return fmt.Errorf("scanning trade for rebuild: %w", err)
+		}
+		trades = append(trades, t)
+	}
+	if err := rows.Err(); err != nil {
+		rows.Close()
+		return fmt.Errorf("iterating trade ledger for rebuild: %w", err)
+	}
+	rows.Close()
+
+	for _, t := range trades {
+		if err := h.ApplyTrade(ctx, db, t); err != nil {
+			return fmt.Errorf("replaying trade %s %s: %w", t.Action, t.Ticker, err)
+		}
+	}
+	return nil
+}

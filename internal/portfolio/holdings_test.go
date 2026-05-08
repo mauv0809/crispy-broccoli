@@ -238,3 +238,79 @@ func TestApplyTrade_ListByPortfolio(t *testing.T) {
 		t.Errorf("len = %d, want 2", len(got))
 	}
 }
+
+func TestHoldings_RebuildMatchesIncrementalApplies(t *testing.T) {
+	pool := testutil.OpenTestDB(t)
+	ctx := context.Background()
+	holdings := portfolio.NewHoldings(pool)
+	p := seedPortfolio(t, pool)
+	seedTicker(t, pool, "AAPL")
+	seedTicker(t, pool, "MSFT")
+
+	now := time.Now().UTC()
+	// Insert trades directly into executed_trades (bypassing the acceptor) to
+	// simulate "rebuild from ledger" with no projection yet.
+	for _, tr := range []struct {
+		ticker, action string
+		shares, price  int64
+	}{
+		{"AAPL", "buy", 10, 180},
+		{"AAPL", "buy", 5, 200},
+		{"AAPL", "sell", 4, 190},
+		{"MSFT", "buy", 8, 410},
+	} {
+		_, err := pool.Exec(ctx, `
+			INSERT INTO executed_trades (portfolio_id, ticker, action, shares, price, executed_at)
+			VALUES ($1, $2, $3, $4, $5, $6)
+		`, p.ID, tr.ticker, tr.action, tr.shares, tr.price, now)
+		if err != nil {
+			t.Fatalf("insert trade: %v", err)
+		}
+	}
+
+	if err := holdings.Rebuild(ctx, pool, p.ID); err != nil {
+		t.Fatalf("rebuild: %v", err)
+	}
+
+	aapl, err := holdings.Get(ctx, p.ID, "AAPL")
+	if err != nil {
+		t.Fatalf("get AAPL: %v", err)
+	}
+	if !aapl.Shares.Equal(decimal.NewFromInt(11)) { // 10 + 5 - 4
+		t.Errorf("AAPL shares = %s, want 11", aapl.Shares)
+	}
+
+	msft, err := holdings.Get(ctx, p.ID, "MSFT")
+	if err != nil {
+		t.Fatalf("get MSFT: %v", err)
+	}
+	if !msft.Shares.Equal(decimal.NewFromInt(8)) {
+		t.Errorf("MSFT shares = %s, want 8", msft.Shares)
+	}
+}
+
+func TestHoldings_RebuildIsIdempotent(t *testing.T) {
+	pool := testutil.OpenTestDB(t)
+	ctx := context.Background()
+	holdings := portfolio.NewHoldings(pool)
+	p := seedPortfolio(t, pool)
+	seedTicker(t, pool, "AAPL")
+
+	now := time.Now().UTC()
+	_, _ = pool.Exec(ctx, `
+		INSERT INTO executed_trades (portfolio_id, ticker, action, shares, price, executed_at)
+		VALUES ($1, 'AAPL', 'buy', 10, 180, $2)
+	`, p.ID, now)
+
+	if err := holdings.Rebuild(ctx, pool, p.ID); err != nil {
+		t.Fatalf("rebuild 1: %v", err)
+	}
+	if err := holdings.Rebuild(ctx, pool, p.ID); err != nil {
+		t.Fatalf("rebuild 2: %v", err)
+	}
+
+	got, _ := holdings.Get(ctx, p.ID, "AAPL")
+	if !got.Shares.Equal(decimal.NewFromInt(10)) {
+		t.Errorf("shares = %s, want 10 (rebuild should be idempotent)", got.Shares)
+	}
+}
