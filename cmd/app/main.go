@@ -136,6 +136,20 @@ func main() {
 		return
 	}
 
+	// Idempotent admin bootstrap on normal HTTP startup. If INITIAL_ADMIN_EMAIL
+	// is set, upsert that user as admin. Upsert preserves is_admin on conflict,
+	// so re-running is safe; a manually-demoted admin only gets re-promoted if
+	// they're missing from the table entirely. Skipped when running CLI
+	// provisioning commands above (they short-circuit with `return`).
+	if email := os.Getenv("INITIAL_ADMIN_EMAIL"); email != "" {
+		u, err := usersRepo.Upsert(ctx, email, "", true)
+		if err != nil {
+			slog.Error("initial admin upsert failed", "email", email, "error", err)
+			os.Exit(1)
+		}
+		slog.Info("initial admin bootstrapped", "email", u.Email, "id", u.ID, "is_admin", u.IsAdmin)
+	}
+
 	// Sessions: scs uses database/sql, not pgx. Open a small companion pool.
 	sqlDB, err := sql.Open("pgx", databaseURL)
 	if err != nil {
