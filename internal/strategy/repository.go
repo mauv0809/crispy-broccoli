@@ -308,6 +308,61 @@ func (r *Repository) CreateDefaultStrategy(ctx context.Context, name, descriptio
 	return &s, nil
 }
 
+// Verify transitions a strategy to status='verified'. The full state-machine
+// guards (forbidding verify-from-archived, requiring at least one version, etc.)
+// land in B5. This placeholder does a bare UPDATE.
+func (r *Repository) Verify(ctx context.Context, strategyID int64) error {
+	_, err := r.pool.Exec(ctx, `UPDATE strategies SET status='verified', updated_at=NOW() WHERE id=$1`, strategyID)
+	if err != nil {
+		return fmt.Errorf("verifying strategy: %w", err)
+	}
+	return nil
+}
+
+// Archive transitions a strategy to status='archived'. The full state-machine
+// guards (rejecting archive-from-draft with active portfolios, etc.) land in B5.
+// This placeholder does a bare UPDATE.
+func (r *Repository) Archive(ctx context.Context, strategyID int64) error {
+	_, err := r.pool.Exec(ctx, `UPDATE strategies SET status='archived', updated_at=NOW() WHERE id=$1`, strategyID)
+	if err != nil {
+		return fmt.Errorf("archiving strategy: %w", err)
+	}
+	return nil
+}
+
+// UpdateRules creates a new strategy_versions row, points current_version_id at
+// it, sets the strategies.rules JSONB to the new value, and resets status to
+// 'draft' (forcing re-verification before this strategy can be attached to new
+// portfolios). All operations run in one transaction.
+//
+// Existing portfolios are unaffected: each portfolio pins a specific
+// strategy_version_id, so they continue rebalancing on their frozen rules
+// regardless of edits made through this method.
+func (r *Repository) UpdateRules(ctx context.Context, id int, rules Rules, updatedBy int64) error {
+	rulesJSON, err := json.Marshal(rules)
+	if err != nil {
+		return fmt.Errorf("marshaling rules: %w", err)
+	}
+	return dbutil.RunInTx(ctx, r.pool, func(tx dbutil.DBTX) error {
+		v, err := r.versions.CreateTx(ctx, tx, int64(id), rulesJSON, updatedBy)
+		if err != nil {
+			return err
+		}
+		_, err = tx.Exec(ctx, `
+			UPDATE strategies
+			SET rules = $1,
+			    current_version_id = $2,
+			    status = 'draft',
+			    updated_at = NOW()
+			WHERE id = $3
+		`, rulesJSON, v.ID, id)
+		if err != nil {
+			return fmt.Errorf("updating strategy: %w", err)
+		}
+		return nil
+	})
+}
+
 // Count returns the total number of strategies
 func (r *Repository) Count(ctx context.Context) (int, error) {
 	var count int
