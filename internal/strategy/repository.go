@@ -390,6 +390,38 @@ func (r *Repository) Count(ctx context.Context) (int, error) {
 	return count, err
 }
 
+// ListVerified returns strategies in 'verified' status, ordered by name.
+// Used by the portfolio create form to populate the strategy picker.
+func (r *Repository) ListVerified(ctx context.Context) ([]Strategy, error) {
+	rows, err := r.pool.Query(ctx, `
+		SELECT id, name, description, rules, is_default, status, default_cadence, current_version_id, created_at, updated_at
+		FROM strategies
+		WHERE status = 'verified'
+		ORDER BY name ASC
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("listing verified strategies: %w", err)
+	}
+	defer rows.Close()
+
+	var out []Strategy
+	for rows.Next() {
+		var s Strategy
+		if err := rows.Scan(
+			&s.ID, &s.Name, &s.Description, &s.Rules, &s.IsDefault,
+			&s.Status, &s.DefaultCadence, &s.CurrentVersionID,
+			&s.CreatedAt, &s.UpdatedAt,
+		); err != nil {
+			return nil, fmt.Errorf("scanning strategy: %w", err)
+		}
+		out = append(out, s)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("listing verified strategies: %w", err)
+	}
+	return out, nil
+}
+
 // GetDefaultStrategies returns all default strategies
 func (r *Repository) GetDefaultStrategies(ctx context.Context) ([]Strategy, error) {
 	rows, err := r.pool.Query(ctx, `
