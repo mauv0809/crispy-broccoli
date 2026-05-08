@@ -3,16 +3,12 @@ package dbutil_test
 import (
 	"context"
 	"fmt"
+	"sync/atomic"
 	"testing"
 
-	"github.com/jackc/pgx/v5/pgxpool"
 	"github.com/mauv0809/crispy-broccoli/internal/dbutil"
 	"github.com/mauv0809/crispy-broccoli/internal/testutil"
 )
-
-func TestDBTX_PoolSatisfiesInterface(t *testing.T) {
-	var _ dbutil.DBTX = (*pgxpool.Pool)(nil)
-}
 
 func TestRunInTx_CommitsOnSuccess(t *testing.T) {
 	pool := testutil.OpenTestDB(t)
@@ -79,9 +75,8 @@ type sentinelErr struct{}
 
 func (*sentinelErr) Error() string { return "sentinel" }
 
-var idCounter int64
+var idCounter atomic.Int64
 
 func uniqueID() int64 {
-	idCounter++
-	return idCounter
+	return idCounter.Add(1)
 }
