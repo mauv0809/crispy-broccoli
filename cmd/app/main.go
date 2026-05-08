@@ -25,6 +25,10 @@ import (
 	"github.com/mauv0809/crispy-broccoli/internal/handlers"
 	"github.com/mauv0809/crispy-broccoli/internal/ingest"
 	"github.com/mauv0809/crispy-broccoli/internal/observability"
+	"github.com/mauv0809/crispy-broccoli/internal/portfolio"
+	"github.com/mauv0809/crispy-broccoli/internal/prices"
+	"github.com/mauv0809/crispy-broccoli/internal/proposal"
+	"github.com/mauv0809/crispy-broccoli/internal/scheduler"
 	"github.com/mauv0809/crispy-broccoli/internal/strategy"
 	"github.com/mauv0809/crispy-broccoli/internal/users"
 
@@ -286,6 +290,67 @@ func main() {
 	strategyHandler = handlers.NewStrategyHandler(strategyRepo, strategyExecutor, backtester)
 	slog.Info("strategy engine initialized")
 
+	// --- Portfolios + proposals + scheduler ---
+
+	versionsRepo := strategy.NewVersionsRepository(pool)
+	strategyHandler.SetVersionsRepository(versionsRepo)
+
+	portfoliosRepo := portfolio.NewRepository(pool)
+	holdings := portfolio.NewHoldings(pool)
+	proposalsRepo := proposal.NewRepository(pool)
+	portfolioService := portfolio.NewService(portfoliosRepo, strategyRepo)
+
+	priceLookup := prices.NewLookup(pool)
+	pickGenerator := proposal.NewGenerator(
+		proposal.NewStrategyExecutorAdapter(strategyExecutor),
+		holdings, // *portfolio.Holdings satisfies HoldingsLister directly
+		priceLookup,
+	)
+	acceptor := proposal.NewAcceptor(pool, proposalsRepo, portfoliosRepo, holdings)
+
+	// Email mailer for proposals — uses the same Sender that magic-link auth uses.
+	proposalMailer := email.NewProposalMailer(
+		sender,
+		os.Getenv("MAIL_FROM"),
+		baseURL(),
+		usersRepo, portfoliosRepo, proposalsRepo, strategyRepo,
+	)
+
+	// Wire and start the scheduler unless explicitly disabled.
+	schedulerEnabled := os.Getenv("SCHEDULER_ENABLED") != "false"
+	sched := scheduler.NewWorker(scheduler.WorkerConfig{
+		Pool:          pool,
+		Proposals:     proposalsRepo,
+		Portfolios:    portfoliosRepo,
+		Strategies:    strategyRepo,
+		Versions:      versionsRepo,
+		PickGenerator: pickGenerator,
+		Mailer:        proposalMailer,
+		Clock:         scheduler.NewRealClock(),
+		TickInterval:  parseEnvDuration("SCHEDULER_TICK_INTERVAL", 15*time.Minute),
+		ReminderAfter: parseEnvDuration("SCHEDULER_REMINDER_AFTER", 72*time.Hour),
+		RetryWindow:   parseEnvDuration("SCHEDULER_NOTIFICATION_RETRY_WINDOW", 6*time.Hour),
+	})
+	if schedulerEnabled {
+		sched.Start(ctx)
+		slog.Info("scheduler started")
+	} else {
+		slog.Info("scheduler disabled (SCHEDULER_ENABLED=false)")
+	}
+
+	// HTTP handlers for portfolios + proposals.
+	portfoliosHandler := handlers.NewPortfoliosHandler(handlers.PortfoliosDeps{
+		Pool: pool, Service: portfolioService, Portfolios: portfoliosRepo, Holdings: holdings,
+		Proposals: proposalsRepo, Strategies: strategyRepo, Versions: versionsRepo,
+		PickGenerator: pickGenerator, Mailer: proposalMailer,
+	})
+	proposalsHandler := handlers.NewProposalsHandler(handlers.ProposalsDeps{
+		Pool: pool, Portfolios: portfoliosRepo, Proposals: proposalsRepo,
+		Strategies: strategyRepo, Versions: versionsRepo,
+		Acceptor: acceptor, PickGen: pickGenerator,
+	})
+	slog.Info("portfolios + proposals handlers registered")
+
 	// Seed default strategies
 	if err := strategy.SeedDefaultStrategies(ctx, pool); err != nil {
 		slog.Warn("failed to seed default strategies", "error", err)
@@ -332,8 +397,31 @@ func main() {
 		// Dashboard API (returns HTML fragments for HTMX)
 		api.GET("/dashboard/strategies", strategyHandler.DashboardStrategies)
 		api.GET("/dashboard/runs", strategyHandler.DashboardRuns)
+
+		// Strategy versions (JSON)
+		api.GET("/strategies/:id/versions", strategyHandler.ListVersions)
+
 		slog.Info("strategy endpoints registered")
 	}
+
+	// Portfolios + proposals
+	e.GET("/portfolios", portfoliosHandler.List, authMiddleware)
+	e.GET("/portfolios/new", portfoliosHandler.NewForm, authMiddleware)
+	e.POST("/portfolios", portfoliosHandler.Create, authMiddleware)
+	e.GET("/portfolios/:id", portfoliosHandler.Detail, authMiddleware)
+	e.POST("/portfolios/:id/pause", portfoliosHandler.Pause, authMiddleware)
+	e.POST("/portfolios/:id/resume", portfoliosHandler.Resume, authMiddleware)
+	e.POST("/portfolios/:id/archive", portfoliosHandler.Archive, authMiddleware)
+
+	e.GET("/portfolios/:id/proposals/:pid", proposalsHandler.Detail, authMiddleware)
+	e.POST("/portfolios/:id/proposals/:pid/recompute", proposalsHandler.Recompute, authMiddleware)
+	e.POST("/portfolios/:id/proposals/:pid/accept", proposalsHandler.Accept, authMiddleware)
+	e.POST("/portfolios/:id/proposals/:pid/skip", proposalsHandler.Skip, authMiddleware)
+
+	// Strategy lifecycle extensions
+	e.POST("/strategies/:id/verify", strategyHandler.Verify, authMiddleware)
+	e.POST("/strategies/:id/archive", strategyHandler.Archive, authMiddleware)
+	slog.Info("portfolio + proposal endpoints registered")
 
 	// Admin routes for data ingestion (Sharadar - fundamentals only)
 	if ingestHandler != nil {
@@ -368,10 +456,45 @@ func main() {
 	<-sigCh
 	slog.Info("shutdown signal received; draining")
 
+	if schedulerEnabled {
+		sched.Stop()
+		slog.Info("scheduler stopped")
+	}
+
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := e.Shutdown(shutdownCtx); err != nil {
 		slog.Error("graceful shutdown error", "error", err)
 	}
 	slog.Info("server stopped")
+}
+
+// parseEnvDuration reads a duration env var, falling back to the default.
+// Bad values fall back too (logged as warning).
+func parseEnvDuration(key string, fallback time.Duration) time.Duration {
+	v := os.Getenv(key)
+	if v == "" {
+		return fallback
+	}
+	d, err := time.ParseDuration(v)
+	if err != nil {
+		slog.Warn("invalid duration env var, using default",
+			"key", key, "value", v, "default", fallback, "err", err)
+		return fallback
+	}
+	return d
+}
+
+// baseURL returns the canonical app URL used in outgoing email links.
+// Reads from APP_BASE_URL if set; otherwise falls back to APP_URL, then localhost.
+// (The magic-link handler computes this per-request from c.Request().Host;
+// the scheduler doesn't have a request, so we read from env instead.)
+func baseURL() string {
+	if v := os.Getenv("APP_BASE_URL"); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	if v := os.Getenv("APP_URL"); v != "" {
+		return strings.TrimRight(v, "/")
+	}
+	return "http://localhost:8080"
 }
