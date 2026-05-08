@@ -1,0 +1,72 @@
+# Kamal 2 deploy config for deepvalue.
+#
+# Local: copy `.kamal/secrets.example` to `.kamal/secrets`, fill in values,
+# then `kamal setup` once, `kamal deploy` thereafter.
+#
+# CI: GitHub Actions runs `kamal deploy` with secrets injected from GH secrets.
+
+service: deepvalue
+image: mauv0809/crispy-broccoli
+
+servers:
+  web:
+    hosts:
+      - box.utiger.dk
+
+# kamal-proxy fronts incoming traffic on :80/:443 and acquires LE certs
+# automatically (HTTP-01 challenge) for each host. No DNS-API access needed.
+proxy:
+  ssl: true
+  host: deepvalue.utiger.dk
+  app_port: 3001
+  healthcheck:
+    path: /health
+    interval: 5
+
+registry:
+  server: ghcr.io
+  username: mauv0809
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+builder:
+  arch: amd64
+  args:
+    BUILD_SHA: <%= ENV.fetch("BUILD_SHA", `git rev-parse --short HEAD`.strip) %>
+    BUILD_TIME: <%= ENV.fetch("BUILD_TIME", Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ")) %>
+
+env:
+  clear:
+    PORT: 3001
+    ENV: production
+    LOG_LEVEL: info
+    BASE_URL: https://deepvalue.utiger.dk
+    MAIL_FROM: magic@forge.utiger.dk
+    INITIAL_ADMIN_EMAIL: morten@airwallet.net
+  secret:
+    # DATABASE_URL embeds POSTGRES_PASSWORD, so the whole URL is a secret.
+    - DATABASE_URL
+    - SESSION_KEY
+    - NASDAQ_API_KEY
+    - TIINGO_API_KEY
+    - SENTRY_DSN
+    - GOOGLE_CLIENT_ID
+    - GOOGLE_CLIENT_SECRET
+    - RESEND_API_KEY
+
+# Postgres lives next to the app on the same box. Kamal joins the
+# accessory to the service network; the app reaches it at host
+# `deepvalue-db` (service-prefixed accessory name).
+accessories:
+  db:
+    image: postgres:18-alpine
+    host: box.utiger.dk
+    port: 5432
+    env:
+      clear:
+        POSTGRES_DB: deepvalue
+        POSTGRES_USER: deepvalue
+      secret:
+        - POSTGRES_PASSWORD
+    volumes:
+      - /var/lib/deepvalue/postgres:/var/lib/postgresql/data
