@@ -62,8 +62,18 @@ jobs:
         with:
           ssh-private-key: ${{ secrets.KAMAL_SSH_PRIVATE_KEY }}
 
-      - name: Trust deploy host
-        run: ssh-keyscan -H box.utiger.dk >> ~/.ssh/known_hosts
+      - name: Pin deploy host's public keys
+        # Pinned from a vetted source (the GH Secret, populated by you
+        # once via `ssh-keyscan` on a trusted machine + verifying against
+        # Hetzner's console). Any mismatch on connection is a real signal,
+        # not a CI hiccup.
+        run: |
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          printf '%s\n' "$KAMAL_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/known_hosts
+        env:
+          KAMAL_SSH_KNOWN_HOSTS: ${{ secrets.KAMAL_SSH_KNOWN_HOSTS }}
 
       - name: Materialize Kamal secrets file
         # Kamal expects .kamal/secrets to exist; we render the committed
