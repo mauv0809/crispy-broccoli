@@ -1,6 +1,8 @@
 package handlers
 
 import (
+	"errors"
+	"fmt"
 	"net/http"
 	"strconv"
 	"time"
@@ -8,6 +10,7 @@ import (
 	"github.com/labstack/echo/v4"
 
 	"github.com/mauv0809/crispy-broccoli/internal/auth"
+	"github.com/mauv0809/crispy-broccoli/internal/observability"
 	"github.com/mauv0809/crispy-broccoli/internal/strategy"
 	"github.com/mauv0809/crispy-broccoli/internal/views"
 )
@@ -18,6 +21,7 @@ type StrategyHandler struct {
 	executor   *strategy.Executor
 	validator  *strategy.Validator
 	backtester *strategy.Backtester
+	versions   *strategy.VersionsRepository
 }
 
 // NewStrategyHandler creates a new strategy handler
@@ -28,6 +32,13 @@ func NewStrategyHandler(repo *strategy.Repository, executor *strategy.Executor, 
 		validator:  strategy.NewValidator(),
 		backtester: backtester,
 	}
+}
+
+// SetVersionsRepository wires the strategy_versions repo. Optional — if not
+// set, the ListVersions handler returns 500. Production wires this in
+// cmd/app/main.go (Phase H4).
+func (h *StrategyHandler) SetVersionsRepository(v *strategy.VersionsRepository) {
+	h.versions = v
 }
 
 // currentUserID returns the authenticated user's ID. Nil-derefs (and
@@ -624,6 +635,58 @@ func (h *StrategyHandler) RunBacktest(c echo.Context) error {
 	}
 
 	return c.JSON(http.StatusOK, result)
+}
+
+// Verify promotes a strategy from draft → verified. Allowed from draft or
+// verified (idempotent); rejected from archived.
+func (h *StrategyHandler) Verify(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid strategy id")
+	}
+	if err := h.repo.Verify(c.Request().Context(), id); err != nil {
+		if errors.Is(err, strategy.ErrInvalidStatusTransition) {
+			return echo.NewHTTPError(http.StatusConflict, err.Error())
+		}
+		observability.CaptureHandlerError(c, err)
+		return echo.NewHTTPError(http.StatusInternalServerError)
+	}
+	return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/strategies/%d", id))
+}
+
+// Archive moves a strategy to archived (terminal). Allowed from any state.
+func (h *StrategyHandler) Archive(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid strategy id")
+	}
+	if err := h.repo.Archive(c.Request().Context(), id); err != nil {
+		observability.CaptureHandlerError(c, err)
+		return echo.NewHTTPError(http.StatusInternalServerError)
+	}
+	return c.Redirect(http.StatusSeeOther, fmt.Sprintf("/strategies/%d", id))
+}
+
+// ListVersions returns the strategy's version history as JSON. No templ
+// view yet — frontend can render this later. Useful today for debugging
+// and for a future "compare v1 vs v2" feature.
+func (h *StrategyHandler) ListVersions(c echo.Context) error {
+	if h.versions == nil {
+		return echo.NewHTTPError(http.StatusInternalServerError, "versions repository not wired")
+	}
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "invalid strategy id")
+	}
+	versions, err := h.versions.ListByStrategy(c.Request().Context(), id)
+	if err != nil {
+		observability.CaptureHandlerError(c, err)
+		return echo.NewHTTPError(http.StatusInternalServerError)
+	}
+	if versions == nil {
+		versions = []strategy.Version{}
+	}
+	return c.JSON(http.StatusOK, versions)
 }
 
 // RunBacktestHTMX runs a backtest and returns HTML results
