@@ -42,6 +42,35 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Verify required secrets are set
+        # Fail fast before we provision anything if a required secret is
+        # missing or empty. Cheaper than discovering it after a half-built
+        # deploy. Optional secrets (SENTRY_DSN, GOOGLE_*, RESEND_API_KEY)
+        # are intentionally not checked — empty values are valid.
+        env:
+          KAMAL_SSH_PRIVATE_KEY: ${{ secrets.KAMAL_SSH_PRIVATE_KEY }}
+          KAMAL_SSH_KNOWN_HOSTS: ${{ secrets.KAMAL_SSH_KNOWN_HOSTS }}
+        run: |
+          missing=()
+          for var in \
+              KAMAL_SSH_PRIVATE_KEY \
+              KAMAL_SSH_KNOWN_HOSTS \
+              DATABASE_URL \
+              POSTGRES_PASSWORD \
+              SESSION_KEY \
+              NASDAQ_API_KEY \
+              TIINGO_API_KEY; do
+            if [ -z "${!var}" ]; then
+              missing+=("$var")
+            fi
+          done
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "::error::Missing required GitHub Secrets: ${missing[*]}"
+            echo "Set them at Settings → Secrets and variables → Actions → New repository secret."
+            exit 1
+          fi
+          echo "All required secrets present."
+
       - uses: ruby/setup-ruby@v1
         with:
           ruby-version: "3.3"

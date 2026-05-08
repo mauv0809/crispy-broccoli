@@ -31,6 +31,13 @@ registry:
 
 builder:
   arch: amd64
+  # buildx layer cache backed by GH Actions cache. Free, 10GB/repo limit.
+  # First CI build is cold; subsequent builds restore Docker layers AND
+  # the Dockerfile's --mount=type=cache (npm, Go modules, Go build cache).
+  # Typical effect: ~30-40s cold → ~10s warm.
+  cache:
+    type: gha
+    options: mode=max
   args:
     # Quoted so YAML doesn't auto-parse the ISO-8601 timestamp as a Time
     # object (which would later stringify back with spaces and break
@@ -72,4 +79,7 @@ accessories:
       secret:
         - POSTGRES_PASSWORD
     volumes:
-      - /var/lib/deepvalue/postgres:/var/lib/postgresql/data
+      # Postgres 18+ stores data in a version-specific subdir under
+      # /var/lib/postgresql, so mount the parent (not /data). Same fix
+      # we landed in docker-compose.yml earlier.
+      - /var/lib/deepvalue/postgres:/var/lib/postgresql
