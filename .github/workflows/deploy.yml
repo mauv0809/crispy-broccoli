@@ -9,7 +9,7 @@ on:
         description: "Kamal command to run"
         type: choice
         options: [deploy, setup, rollback]
-        default: deploy
+        default: setup
 
 # Default GITHUB_TOKEN scopes:
 # - contents:read   to checkout
@@ -83,7 +83,11 @@ jobs:
           cp .kamal/secrets.example .kamal/secrets
 
       - name: Run Kamal
+        # Default to `setup` for both push and workflow_dispatch.
+        # `setup` is idempotent: on a configured host it's basically
+        # equivalent to `deploy` plus a fast accessory-state check.
+        # The price (~10s) buys us "first deploy on a fresh box also works."
         run: |
-          CMD="${{ inputs.command || 'deploy' }}"
+          CMD="${{ inputs.command || 'setup' }}"
           echo "Running: kamal $CMD"
           kamal "$CMD"
