@@ -14,12 +14,16 @@ import (
 
 // Repository handles database operations for strategies
 type Repository struct {
-	pool *pgxpool.Pool
+	pool     *pgxpool.Pool
+	versions *VersionsRepository
 }
 
 // NewRepository creates a new strategy repository
 func NewRepository(pool *pgxpool.Pool) *Repository {
-	return &Repository{pool: pool}
+	return &Repository{
+		pool:     pool,
+		versions: NewVersionsRepository(pool),
+	}
 }
 
 // Create inserts a new strategy authored by the given user and seeds v1 in
@@ -31,7 +35,7 @@ func (r *Repository) Create(ctx context.Context, req CreateStrategyRequest, crea
 		return nil, fmt.Errorf("marshaling rules: %w", err)
 	}
 
-	versions := NewVersionsRepository(r.pool)
+	versions := r.versions
 
 	var s Strategy
 	err = dbutil.RunInTx(ctx, r.pool, func(tx dbutil.DBTX) error {
@@ -114,7 +118,11 @@ func (r *Repository) List(ctx context.Context) ([]Strategy, error) {
 	return strategies, rows.Err()
 }
 
-// Update updates an existing strategy
+// Update changes a strategy's name/description/rules in place WITHOUT touching
+// current_version_id or strategy_versions. UpdateRules (Phase B3) handles the
+// version-bumping flow used when a verified strategy's rules are edited.
+// Today this method is used only by tests and by handlers that don't need to
+// preserve version history.
 func (r *Repository) Update(ctx context.Context, id int64, req UpdateStrategyRequest) (*Strategy, error) {
 	rulesJSON, err := json.Marshal(req.Rules)
 	if err != nil {
@@ -249,7 +257,7 @@ func (r *Repository) CreateDefaultStrategy(ctx context.Context, name, descriptio
 	if err != nil {
 		return nil, fmt.Errorf("marshaling rules: %w", err)
 	}
-	versions := NewVersionsRepository(r.pool)
+	versions := r.versions
 
 	var s Strategy
 	err = dbutil.RunInTx(ctx, r.pool, func(tx dbutil.DBTX) error {

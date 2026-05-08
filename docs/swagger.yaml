@@ -76,8 +76,22 @@ definitions:
         description: Total percentage return
         type: number
     type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.Cadence:
+    enum:
+    - monthly
+    - quarterly
+    - semi_annual
+    - annual
+    type: string
+    x-enum-varnames:
+    - CadenceMonthly
+    - CadenceQuarterly
+    - CadenceSemiAnnual
+    - CadenceAnnual
   github_com_mauv0809_crispy-broccoli_internal_strategy.CreateStrategyRequest:
     properties:
+      default_cadence:
+        $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Cadence'
       description:
         type: string
       name:
@@ -236,10 +250,24 @@ definitions:
       total_runs:
         type: integer
     type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.Status:
+    enum:
+    - draft
+    - verified
+    - archived
+    type: string
+    x-enum-varnames:
+    - StatusDraft
+    - StatusVerified
+    - StatusArchived
   github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy:
     properties:
       created_at:
         type: string
+      current_version_id:
+        type: integer
+      default_cadence:
+        $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Cadence'
       description:
         type: string
       id:
@@ -250,6 +278,8 @@ definitions:
         type: string
       rules:
         $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Rules'
+      status:
+        $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Status'
       updated_at:
         type: string
     type: object

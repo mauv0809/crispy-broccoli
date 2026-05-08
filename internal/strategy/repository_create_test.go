@@ -50,6 +50,9 @@ func TestCreate_WithDefaultCadenceStores(t *testing.T) {
 	if err != nil {
 		t.Fatalf("create: %v", err)
 	}
+	if s.CurrentVersionID == nil {
+		t.Error("CurrentVersionID nil after Create")
+	}
 	if s.DefaultCadence == nil || *s.DefaultCadence != strategy.CadenceQuarterly {
 		t.Errorf("default_cadence not preserved: %v", s.DefaultCadence)
 	}
@@ -75,6 +78,6 @@ func TestGetByID_ReadsNewColumns(t *testing.T) {
 		t.Errorf("status = %s, want draft", got.Status)
 	}
 	if got.CurrentVersionID == nil || *got.CurrentVersionID != *created.CurrentVersionID {
-		t.Errorf("CurrentVersionID round-trip failed")
+		t.Errorf("CurrentVersionID = %v, want %v", got.CurrentVersionID, created.CurrentVersionID)
 	}
 }

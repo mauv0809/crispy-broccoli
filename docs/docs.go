@@ -836,9 +836,27 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.Cadence": {
+            "type": "string",
+            "enum": [
+                "monthly",
+                "quarterly",
+                "semi_annual",
+                "annual"
+            ],
+            "x-enum-varnames": [
+                "CadenceMonthly",
+                "CadenceQuarterly",
+                "CadenceSemiAnnual",
+                "CadenceAnnual"
+            ]
+        },
         "github_com_mauv0809_crispy-broccoli_internal_strategy.CreateStrategyRequest": {
             "type": "object",
             "properties": {
+                "default_cadence": {
+                    "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Cadence"
+                },
                 "description": {
                     "type": "string"
                 },
@@ -1068,11 +1086,30 @@ const docTemplate = `{
                 }
             }
         },
+        "github_com_mauv0809_crispy-broccoli_internal_strategy.Status": {
+            "type": "string",
+            "enum": [
+                "draft",
+                "verified",
+                "archived"
+            ],
+            "x-enum-varnames": [
+                "StatusDraft",
+                "StatusVerified",
+                "StatusArchived"
+            ]
+        },
         "github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy": {
             "type": "object",
             "properties": {
                 "created_at": {
                     "type": "string"
+                },
+                "current_version_id": {
+                    "type": "integer"
+                },
+                "default_cadence": {
+                    "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Cadence"
                 },
                 "description": {
                     "type": "string"
@@ -1088,6 +1125,9 @@ const docTemplate = `{
                 },
                 "rules": {
                     "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Rules"
+                },
+                "status": {
+                    "$ref": "#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Status"
                 },
                 "updated_at": {
                     "type": "string"

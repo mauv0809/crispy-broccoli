@@ -23,12 +23,15 @@ type Strategy struct {
 type Status string
 
 const (
-	StatusDraft    Status = "draft"
+	// StatusDraft means the strategy can be edited freely but cannot be attached to a live portfolio.
+	StatusDraft Status = "draft"
+	// StatusVerified means the user has signed off on the strategy; only verified strategies can be attached to portfolios.
 	StatusVerified Status = "verified"
+	// StatusArchived is a terminal state; existing portfolios continue rebalancing on their pinned version, but no new portfolios can attach.
 	StatusArchived Status = "archived"
 )
 
-// Cadence is how often a strategy is intended to be re-run.
+// Cadence is the rebalance frequency a strategy was backtested at; portfolios inherit it as their default rebalance cadence.
 type Cadence string
 
 const (
