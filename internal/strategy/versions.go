@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -48,6 +49,9 @@ func (r *VersionsRepository) Create(ctx context.Context, strategyID int64, rules
 // strategy update commit atomically.
 func (r *VersionsRepository) CreateTx(ctx context.Context, db dbutil.DBTX, strategyID int64, rules json.RawMessage, createdBy int64) (*Version, error) {
 	var v Version
+	// MAX+1 is a read-modify-write; the UNIQUE(strategy_id, version_number)
+	// constraint serialises concurrent inserts as 23505 violations — callers
+	// should treat that as a benign retry signal under contention.
 	err := db.QueryRow(ctx, `
 		INSERT INTO strategy_versions (strategy_id, version_number, rules, created_by)
 		VALUES ($1,
@@ -57,7 +61,7 @@ func (r *VersionsRepository) CreateTx(ctx context.Context, db dbutil.DBTX, strat
 		RETURNING id, strategy_id, version_number, rules, created_at, created_by
 	`, strategyID, rules, createdBy).Scan(&v.ID, &v.StrategyID, &v.VersionNumber, &v.Rules, &v.CreatedAt, &v.CreatedBy)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("creating strategy version: %w", err)
 	}
 	return &v, nil
 }
@@ -73,7 +77,7 @@ func (r *VersionsRepository) Get(ctx context.Context, id int64) (*Version, error
 		return nil, ErrVersionNotFound
 	}
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("getting strategy version: %w", err)
 	}
 	return &v, nil
 }
@@ -87,7 +91,7 @@ func (r *VersionsRepository) ListByStrategy(ctx context.Context, strategyID int6
 		ORDER BY version_number DESC
 	`, strategyID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("listing strategy versions: %w", err)
 	}
 	defer rows.Close()
 
@@ -95,9 +99,12 @@ func (r *VersionsRepository) ListByStrategy(ctx context.Context, strategyID int6
 	for rows.Next() {
 		var v Version
 		if err := rows.Scan(&v.ID, &v.StrategyID, &v.VersionNumber, &v.Rules, &v.CreatedAt, &v.CreatedBy); err != nil {
-			return nil, err
+			return nil, fmt.Errorf("scanning strategy version: %w", err)
 		}
 		out = append(out, v)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("listing strategy versions: %w", err)
+	}
+	return out, nil
 }
