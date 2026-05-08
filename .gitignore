@@ -28,6 +28,9 @@ go.work.sum
 .env
 .env.local
 
+# Kamal secrets — only the .example template is checked in.
+.kamal/secrets
+
 # Editor/IDE
 .idea/
 .vscode/
