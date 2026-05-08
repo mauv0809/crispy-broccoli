@@ -73,8 +73,12 @@ func newPortfoliosHandler(t *testing.T) (*handlers.PortfoliosHandler, *strategy.
 func seedVerifiedStrategy(t *testing.T, sRepo *strategy.Repository, uid int64) *strategy.Strategy {
 	t.Helper()
 	rules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
+	// Seed with a default cadence so portfolio.Service.CreatePortfolio doesn't
+	// reject calls that omit the cadence form field — most tests don't care
+	// about cadence semantics and shouldn't have to remember to set it.
+	cadence := strategy.CadenceQuarterly
 	s, err := sRepo.Create(context.Background(),
-		strategy.CreateStrategyRequest{Name: t.Name() + "-strat", Rules: rules}, uid)
+		strategy.CreateStrategyRequest{Name: t.Name() + "-strat", Rules: rules, DefaultCadence: &cadence}, uid)
 	if err != nil {
 		t.Fatalf("seed strategy: %v", err)
 	}
