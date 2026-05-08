@@ -308,24 +308,44 @@ func (r *Repository) CreateDefaultStrategy(ctx context.Context, name, descriptio
 	return &s, nil
 }
 
-// Verify transitions a strategy to status='verified'. The full state-machine
-// guards (forbidding verify-from-archived, requiring at least one version, etc.)
-// land in B5. This placeholder does a bare UPDATE.
+// ErrInvalidStatusTransition is returned when Verify/Archive is called with a
+// disallowed source status (e.g., verifying an archived strategy) or against a
+// strategy that doesn't exist.
+var ErrInvalidStatusTransition = errors.New("invalid strategy status transition")
+
+// Verify transitions a strategy to status='verified'. Allowed from 'draft' or
+// 'verified' (idempotent); rejected from 'archived' (terminal). Returns
+// ErrInvalidStatusTransition if the strategy is missing or in an unsupported
+// source state.
 func (r *Repository) Verify(ctx context.Context, strategyID int64) error {
-	_, err := r.pool.Exec(ctx, `UPDATE strategies SET status='verified', updated_at=NOW() WHERE id=$1`, strategyID)
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE strategies
+		SET status = 'verified', updated_at = NOW()
+		WHERE id = $1 AND status IN ('draft', 'verified')
+	`, strategyID)
 	if err != nil {
 		return fmt.Errorf("verifying strategy: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("%w: strategy %d not in draft/verified state (or missing)", ErrInvalidStatusTransition, strategyID)
 	}
 	return nil
 }
 
-// Archive transitions a strategy to status='archived'. The full state-machine
-// guards (rejecting archive-from-draft with active portfolios, etc.) land in B5.
-// This placeholder does a bare UPDATE.
+// Archive transitions a strategy to status='archived' from any state.
+// Idempotent: archiving an already-archived strategy succeeds. Returns an
+// error only if the strategy doesn't exist.
 func (r *Repository) Archive(ctx context.Context, strategyID int64) error {
-	_, err := r.pool.Exec(ctx, `UPDATE strategies SET status='archived', updated_at=NOW() WHERE id=$1`, strategyID)
+	tag, err := r.pool.Exec(ctx, `
+		UPDATE strategies
+		SET status = 'archived', updated_at = NOW()
+		WHERE id = $1
+	`, strategyID)
 	if err != nil {
 		return fmt.Errorf("archiving strategy: %w", err)
+	}
+	if tag.RowsAffected() == 0 {
+		return fmt.Errorf("strategy %d not found", strategyID)
 	}
 	return nil
 }
