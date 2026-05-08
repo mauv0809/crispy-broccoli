@@ -32,8 +32,11 @@ registry:
 builder:
   arch: amd64
   args:
-    BUILD_SHA: <%= ENV.fetch("BUILD_SHA", `git rev-parse --short HEAD`.strip) %>
-    BUILD_TIME: <%= ENV.fetch("BUILD_TIME", Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ")) %>
+    # Quoted so YAML doesn't auto-parse the ISO-8601 timestamp as a Time
+    # object (which would later stringify back with spaces and break
+    # `go build -ldflags`'s `-X` flag).
+    BUILD_SHA: '<%= ENV.fetch("BUILD_SHA", `git rev-parse --short HEAD`.strip) %>'
+    BUILD_TIME: '<%= ENV.fetch("BUILD_TIME", Time.now.utc.strftime("%Y-%m-%dT%H:%M:%SZ")) %>'
 
 env:
   clear:
