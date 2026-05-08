@@ -29,16 +29,13 @@ func TestVersions_CreateAndGet(t *testing.T) {
 	versions := strategy.NewVersionsRepository(pool)
 	uid := systemUserID(t, pool)
 
-	// Insert a bare strategies row directly (Phase B1+B4 will hook v1 seeding into
-	// repo.Create; for now we exercise versions in isolation).
+	// Insert a bare strategies row directly (current_version_id is nullable per
+	// migration 025, so we omit it here and patch it after creating v1).
 	var strategyID int64
 	rules := []byte(`{"filters":[],"ranking":[],"limit":6,"dimension":"MRQ"}`)
 	err := pool.QueryRow(ctx, `
-		INSERT INTO strategies (name, description, rules, is_default, status, current_version_id, created_by, created_at, updated_at)
-		VALUES ('Test', '', $1::jsonb, false, 'draft',
-		        -- placeholder current_version_id; we'll fix it after inserting v1
-		        (SELECT COALESCE(MAX(id), 0) FROM strategy_versions) + 1,
-		        $2, NOW(), NOW())
+		INSERT INTO strategies (name, description, rules, is_default, status, created_by, created_at, updated_at)
+		VALUES ('Test', '', $1::jsonb, false, 'draft', $2, NOW(), NOW())
 		RETURNING id
 	`, rules, uid).Scan(&strategyID)
 	if err != nil {
