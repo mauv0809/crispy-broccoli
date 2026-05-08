@@ -61,11 +61,13 @@ func newPortfoliosHandler(t *testing.T) (*handlers.PortfoliosHandler, *strategy.
 	prRepo := proposal.NewRepository(pool)
 	versionsRepo := strategy.NewVersionsRepository(pool)
 	svc := portfolio.NewService(pRepo, sRepo)
+	performance := portfolio.NewPerformance(pool)
 
 	h := handlers.NewPortfoliosHandler(handlers.PortfoliosDeps{
 		Pool: pool, Service: svc, Portfolios: pRepo, Holdings: hlds,
 		Proposals: prRepo, Strategies: sRepo, Versions: versionsRepo,
 		PickGenerator: stubPickGenerator{}, Mailer: stubMailer{},
+		Performance: performance,
 	})
 	return h, sRepo, systemUserID(t, pool)
 }

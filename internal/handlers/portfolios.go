@@ -30,6 +30,7 @@ type PortfoliosHandler struct {
 	service       *portfolio.Service
 	portfolios    *portfolio.Repository
 	holdings      *portfolio.Holdings
+	performance   *portfolio.Performance
 	proposals     *proposal.Repository
 	strategies    *strategy.Repository
 	versions      *strategy.VersionsRepository
@@ -42,6 +43,7 @@ type PortfoliosDeps struct {
 	Service       *portfolio.Service
 	Portfolios    *portfolio.Repository
 	Holdings      *portfolio.Holdings
+	Performance   *portfolio.Performance
 	Proposals     *proposal.Repository
 	Strategies    *strategy.Repository
 	Versions      *strategy.VersionsRepository
@@ -52,7 +54,8 @@ type PortfoliosDeps struct {
 func NewPortfoliosHandler(d PortfoliosDeps) *PortfoliosHandler {
 	return &PortfoliosHandler{
 		pool: d.Pool, service: d.Service, portfolios: d.Portfolios, holdings: d.Holdings,
-		proposals: d.Proposals, strategies: d.Strategies, versions: d.Versions,
+		performance:   d.Performance,
+		proposals:     d.Proposals, strategies: d.Strategies, versions: d.Versions,
 		pickGenerator: d.PickGenerator, mailer: d.Mailer,
 	}
 }
@@ -81,14 +84,23 @@ func (h *PortfoliosHandler) List(c echo.Context) error {
 			hasPending = true
 		}
 
-		// TODO(I3): real current-value computation. For now use starting_capital
-		// so the page renders something sensible. Phase I wires performance.
+		snap, err := h.performance.Current(ctx, p.ID)
+		if err != nil {
+			// Log but render the card with zeros — performance is non-critical for the list view.
+			observability.CaptureHandlerError(c, err)
+			snap = &portfolio.Snapshot{
+				MarketValue:  p.StartingCapital,
+				ReturnAmount: decimal.Zero,
+				ReturnPct:    decimal.Zero,
+			}
+		}
+
 		items = append(items, views.PortfolioListItem{
 			Portfolio:    p,
 			StrategyName: strategyName,
-			CurrentValue: p.StartingCapital,
-			ReturnAmount: decimal.Zero,
-			ReturnPct:    decimal.Zero,
+			CurrentValue: snap.MarketValue,
+			ReturnAmount: snap.ReturnAmount,
+			ReturnPct:    snap.ReturnPct,
 			HasPending:   hasPending,
 		})
 	}
@@ -269,20 +281,57 @@ func (h *PortfoliosHandler) Detail(c echo.Context) error {
 		rows = append(rows, views.HoldingRow{Holding: hld})
 	}
 
+	snap, err := h.performance.Current(ctx, p.ID)
+	if err != nil {
+		observability.CaptureHandlerError(c, err)
+		return echo.NewHTTPError(http.StatusInternalServerError)
+	}
+
 	d := views.PortfolioDetailData{
 		Portfolio:       *p,
 		StrategyName:    safeStrategyName(strat),
 		StrategyVersion: safeVersionNumber(ver),
 		Holdings:        rows,
-		History:         nil, // Phase I3 fills this in
+		History:         nil,
 		PendingProposal: pending,
-		// TODO(I3): real current-value/return computation.
-		CurrentValue: p.StartingCapital,
-		NetInvested:  p.StartingCapital,
-		ReturnAmount: decimal.Zero,
-		ReturnPct:    decimal.Zero,
+		CurrentValue:    snap.MarketValue,
+		NetInvested:     snap.NetInvested,
+		ReturnAmount:    snap.ReturnAmount,
+		ReturnPct:       snap.ReturnPct,
 	}
 	return Render(c, http.StatusOK, views.PortfolioDetail(d))
+}
+
+// PerformanceJSON returns the portfolio's daily value time series + SPY
+// normalised series as JSON, used by the Chart.js chart on the detail page.
+// The window is "since portfolio creation" through today.
+func (h *PortfoliosHandler) PerformanceJSON(c echo.Context) error {
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest)
+	}
+	ctx := c.Request().Context()
+
+	p, err := h.portfolios.GetByID(ctx, id)
+	if errors.Is(err, portfolio.ErrNotFound) {
+		return echo.NewHTTPError(http.StatusNotFound)
+	}
+	if err != nil {
+		observability.CaptureHandlerError(c, err)
+		return echo.NewHTTPError(http.StatusInternalServerError)
+	}
+	if !canAccessPortfolio(c, p) {
+		return echo.NewHTTPError(http.StatusNotFound)
+	}
+
+	to := time.Now().UTC().Truncate(24 * time.Hour)
+	from := p.CreatedAt.UTC().Truncate(24 * time.Hour)
+	series, err := h.performance.TimeSeries(ctx, id, from, to)
+	if err != nil {
+		observability.CaptureHandlerError(c, err)
+		return echo.NewHTTPError(http.StatusInternalServerError)
+	}
+	return c.JSON(http.StatusOK, series)
 }
 
 func (h *PortfoliosHandler) Pause(c echo.Context) error {

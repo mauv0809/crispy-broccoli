@@ -297,6 +297,7 @@ func main() {
 
 	portfoliosRepo := portfolio.NewRepository(pool)
 	holdings := portfolio.NewHoldings(pool)
+	performance := portfolio.NewPerformance(pool)
 	proposalsRepo := proposal.NewRepository(pool)
 	portfolioService := portfolio.NewService(portfoliosRepo, strategyRepo)
 
@@ -343,6 +344,7 @@ func main() {
 		Pool: pool, Service: portfolioService, Portfolios: portfoliosRepo, Holdings: holdings,
 		Proposals: proposalsRepo, Strategies: strategyRepo, Versions: versionsRepo,
 		PickGenerator: pickGenerator, Mailer: proposalMailer,
+		Performance: performance,
 	})
 	proposalsHandler := handlers.NewProposalsHandler(handlers.ProposalsDeps{
 		Pool: pool, Portfolios: portfoliosRepo, Proposals: proposalsRepo,
@@ -409,6 +411,7 @@ func main() {
 	e.GET("/portfolios/new", portfoliosHandler.NewForm, authMiddleware)
 	e.POST("/portfolios", portfoliosHandler.Create, authMiddleware)
 	e.GET("/portfolios/:id", portfoliosHandler.Detail, authMiddleware)
+	e.GET("/portfolios/:id/performance.json", portfoliosHandler.PerformanceJSON, authMiddleware)
 	e.POST("/portfolios/:id/pause", portfoliosHandler.Pause, authMiddleware)
 	e.POST("/portfolios/:id/resume", portfoliosHandler.Resume, authMiddleware)
 	e.POST("/portfolios/:id/archive", portfoliosHandler.Archive, authMiddleware)
