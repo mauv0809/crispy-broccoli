@@ -1,0 +1,77 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/mauv0809/crispy-broccoli/internal/strategy"
+)
+
+// StrategyChoice is a row in the strategy picker on the create form. The
+// handler filters to verified strategies only.
+type StrategyChoice struct {
+	ID             int64
+	Name           string
+	DefaultCadence *strategy.Cadence
+}
+
+templ PortfolioForm(strategies []StrategyChoice, errMsg string) {
+	@Layout("New portfolio") {
+		<div class="space-y-4 sm:space-y-6 max-w-xl">
+			<div>
+				<h1 class="text-xl sm:text-2xl font-bold text-primary">New portfolio</h1>
+				<p class="text-base-content/70 text-sm mt-1">Pin a verified strategy and choose your starting capital</p>
+			</div>
+
+			if errMsg != "" {
+				<div role="alert" class="alert alert-error">
+					<span>{ errMsg }</span>
+				</div>
+			}
+
+			<form class="space-y-4" method="POST" action="/portfolios">
+				<input type="hidden" name="csrf" value={ CSRFFromContext(ctx) }/>
+				<div class="form-control">
+					<label class="label" for="name"><span class="label-text">Portfolio name</span></label>
+					<input class="input input-bordered" type="text" name="name" id="name" required maxlength="120"/>
+				</div>
+				<div class="form-control">
+					<label class="label" for="starting_capital"><span class="label-text">Starting capital ($)</span></label>
+					<input class="input input-bordered" type="number" name="starting_capital" id="starting_capital" required min="1" step="0.01"/>
+				</div>
+				<div class="form-control">
+					<label class="label" for="strategy_id"><span class="label-text">Strategy (verified only)</span></label>
+					<select class="select select-bordered" name="strategy_id" id="strategy_id" required>
+						<option value="">Select a strategy…</option>
+						for _, s := range strategies {
+							<option value={ fmt.Sprintf("%d", s.ID) }>
+								{ s.Name }
+								if s.DefaultCadence != nil {
+									{ fmt.Sprintf(" (default: %s)", *s.DefaultCadence) }
+								}
+							</option>
+						}
+					</select>
+					if len(strategies) == 0 {
+						<label class="label">
+							<span class="label-text-alt text-warning">No verified strategies yet — verify one from the Strategies page first.</span>
+						</label>
+					}
+				</div>
+				<div class="form-control">
+					<label class="label" for="cadence"><span class="label-text">Cadence (override strategy default)</span></label>
+					<select class="select select-bordered" name="cadence" id="cadence">
+						<option value="">Use strategy default</option>
+						<option value="monthly">Monthly</option>
+						<option value="quarterly">Quarterly</option>
+						<option value="semi_annual">Semi-annual</option>
+						<option value="annual">Annual</option>
+					</select>
+				</div>
+				<div class="pt-2 flex justify-end gap-2">
+					<a class="btn btn-ghost btn-sm" href="/portfolios">Cancel</a>
+					<button class="btn btn-primary btn-sm" type="submit">Create portfolio</button>
+				</div>
+			</form>
+		</div>
+	}
+}
