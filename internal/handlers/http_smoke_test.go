@@ -378,8 +378,11 @@ func TestHTTP_PortfolioPause_FullFlow(t *testing.T) {
 	// POST /portfolios/:id/pause with the token.
 	pauseForm := url.Values{}
 	pauseForm.Set("_csrf", detailToken)
-	pauseResp, _ := app.client.PostForm(
+	pauseResp, err := app.client.PostForm(
 		app.server.URL+"/portfolios/"+pidStr+"/pause", pauseForm)
+	if err != nil {
+		t.Fatalf("POST pause: %v", err)
+	}
 	defer pauseResp.Body.Close()
 	if pauseResp.StatusCode != http.StatusSeeOther {
 		buf, _ := io.ReadAll(pauseResp.Body)

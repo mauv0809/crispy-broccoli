@@ -435,6 +435,7 @@ func main() {
 		admin.POST("/ingest/sp500", ingestHandler.IngestSP500)
 		admin.POST("/ingest/benchmark", ingestHandler.IngestBenchmark)
 		admin.POST("/ingest/prices", ingestHandler.IngestPrices)
+		admin.POST("/ingest/prices/nasdaq", ingestHandler.IngestPricesNasdaq)
 		slog.Info("ingestion endpoints registered")
 	}
 

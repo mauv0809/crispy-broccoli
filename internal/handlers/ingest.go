@@ -646,3 +646,172 @@ func (h *IngestHandler) IngestPrices(c echo.Context) error {
 		Elapsed: elapsed.String(),
 	})
 }
+
+// IngestPricesNasdaq handles POST /admin/ingest/prices/nasdaq.
+//
+// Uses the Nasdaq Data Link SEP (Sharadar Equity Prices) endpoint, which
+// batches many tickers per HTTP request and is rate-limited at 2 req/sec
+// inside the client itself — no per-hour cap to track. Vastly faster than
+// the per-ticker Tiingo path for bulk loads.
+//
+// @Summary Ingest daily stock prices via Nasdaq Data Link
+// @Description Fetches daily prices from SHARADAR/SEP — bulk-friendly alternative to /admin/ingest/prices (Tiingo)
+// @Tags ingestion
+// @Accept json
+// @Produce json
+// @Param ticker query string false "Comma-separated tickers (defaults to batch of stocks needing prices)"
+// @Param limit query int false "Max tickers to fetch (default 200; SEP can handle hundreds per request)"
+// @Param stale_days query int false "Consider data stale after N days (default 3)"
+// @Param retry_days query int false "Days to wait before retrying tickers with no data (default 7)"
+// @Param parallel query int false "Number of parallel API requests (default 4)"
+// @Success 200 {object} IngestResponse
+// @Failure 503 {object} IngestResponse
+// @Router /admin/ingest/prices/nasdaq [post]
+func (h *IngestHandler) IngestPricesNasdaq(c echo.Context) error {
+	ctx := c.Request().Context()
+	start := time.Now()
+
+	if h.client == nil {
+		return c.JSON(http.StatusServiceUnavailable, IngestResponse{
+			Success: false,
+			Message: "Nasdaq Data Link API not configured (NASDAQ_API_KEY not set)",
+		})
+	}
+
+	// Tuned defaults for SEP's bulk-friendly characteristics (200 tickers
+	// per call vs Tiingo's 10-per-hour at the same defaults).
+	batchLimit := 200
+	if v := c.QueryParam("limit"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			batchLimit = n
+		}
+	}
+	staleDays := 3
+	if v := c.QueryParam("stale_days"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			staleDays = n
+		}
+	}
+	retryDays := 7
+	if v := c.QueryParam("retry_days"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 0 {
+			retryDays = n
+		}
+	}
+	maxParallel := 4
+	if v := c.QueryParam("parallel"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 && n <= 16 {
+			maxParallel = n
+		}
+	}
+
+	// Resolve which tickers to fetch. Same staleness semantics as the Tiingo
+	// path so admins can swap source without changing query patterns.
+	type tickerInfo struct {
+		ticker   string
+		lastDate time.Time
+	}
+	var tickersToFetch []tickerInfo
+
+	if tickerParam := c.QueryParam("ticker"); tickerParam != "" {
+		tickers := strings.Split(tickerParam, ",")
+		for _, t := range tickers {
+			t = strings.TrimSpace(t)
+			if t == "" {
+				continue
+			}
+			lastDate, _ := h.repo.GetLastPriceDateForTicker(ctx, t)
+			tickersToFetch = append(tickersToFetch, tickerInfo{ticker: t, lastDate: lastDate})
+		}
+	} else {
+		statuses, err := h.repo.GetTickersNeedingPriceUpdate(ctx, batchLimit, staleDays, retryDays)
+		if err != nil {
+			slog.Error("failed to get tickers needing price update", "error", err)
+			return c.JSON(http.StatusInternalServerError, IngestResponse{
+				Success: false,
+				Message: fmt.Sprintf("Failed to get tickers: %v", err),
+			})
+		}
+		slog.Info("found tickers needing price update", "count", len(statuses), "source", "nasdaq")
+		for _, s := range statuses {
+			tickersToFetch = append(tickersToFetch, tickerInfo{ticker: s.Ticker, lastDate: s.LastDate})
+		}
+	}
+
+	if len(tickersToFetch) == 0 {
+		return c.JSON(http.StatusOK, IngestResponse{
+			Success: true,
+			Message: "All tickers are up to date",
+			Count:   0,
+		})
+	}
+
+	// SEP takes a single date range per request; mixing per-ticker start
+	// dates would force one call per ticker (defeating the bulk advantage).
+	// Use the OLDEST lastDate across the batch as the lower bound. The
+	// upsert dedupes on (ticker, date), so over-fetching newer rows is
+	// harmless — just slightly more bytes over the wire.
+	endDate := time.Now()
+	startDate := time.Date(2010, 1, 1, 0, 0, 0, 0, time.UTC)
+	for _, ti := range tickersToFetch {
+		if ti.lastDate.Year() >= 2000 && ti.lastDate.Before(endDate) {
+			cutoff := ti.lastDate.AddDate(0, 0, 1)
+			if cutoff.Before(startDate) {
+				startDate = cutoff
+			}
+		}
+	}
+
+	tickers := make([]string, 0, len(tickersToFetch))
+	for _, ti := range tickersToFetch {
+		tickers = append(tickers, ti.ticker)
+	}
+
+	slog.Info("starting nasdaq price ingestion",
+		"ticker_count", len(tickers),
+		"start", startDate.Format("2006-01-02"),
+		"parallel", maxParallel)
+
+	// Stream batches; upsert each as it arrives. The client paginates and
+	// rate-limits internally — we just consume.
+	var totalCount int
+	var batches int
+	var fetchErrors []string
+	stream := h.client.FetchSEPStream(ctx, tickers, startDate, endDate, maxParallel)
+	for batch := range stream {
+		batches++
+		if batch.Error != nil {
+			fetchErrors = append(fetchErrors, batch.Error.Error())
+			continue
+		}
+		if len(batch.Rows) == 0 {
+			continue
+		}
+		count, err := h.repo.UpsertDailyPrices(ctx, batch.Rows)
+		if err != nil {
+			fetchErrors = append(fetchErrors, fmt.Sprintf("upsert: %v", err))
+			continue
+		}
+		totalCount += count
+		slog.Info("ingested nasdaq batch", "rows", count, "batch", batches)
+	}
+
+	// Mark every requested ticker as attempted so the staleness query
+	// doesn't immediately re-pick them.
+	if err := h.repo.MarkPriceFetchAttempted(ctx, tickers); err != nil {
+		slog.Error("failed to mark tickers as attempted", "error", err)
+	}
+
+	elapsed := time.Since(start)
+	msg := fmt.Sprintf("Ingested %d prices across %d tickers in %d batch(es)",
+		totalCount, len(tickers), batches)
+	if len(fetchErrors) > 0 {
+		msg += fmt.Sprintf(" (errors: %d)", len(fetchErrors))
+	}
+	return c.JSON(http.StatusOK, IngestResponse{
+		Success: totalCount > 0 || len(fetchErrors) == 0,
+		Message: msg,
+		Count:   totalCount,
+		Elapsed: elapsed.String(),
+	})
+}
