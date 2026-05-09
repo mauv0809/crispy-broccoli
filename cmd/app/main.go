@@ -278,10 +278,12 @@ func main() {
 		slog.Warn("TIINGO_API_KEY not set; benchmark comparison disabled")
 	}
 
-	// Setup ingest handler (needs both clients)
-	if nasdaqClient != nil {
-		ingestHandler = handlers.NewIngestHandler(nasdaqClient, tiingoClient, repo)
-	}
+	// Always construct the ingest handler — each endpoint checks its own
+	// client (nasdaq vs tiingo) and returns 503 with a meaningful message if
+	// the relevant key isn't set. Gating the whole admin group on a single
+	// client meant any missing key 404'd every admin route, including the
+	// status query and the routes that don't depend on that client at all.
+	ingestHandler = handlers.NewIngestHandler(nasdaqClient, tiingoClient, repo)
 
 	// Setup strategy handler with backtester
 	strategyRepo := strategy.NewRepository(pool)
