@@ -29,7 +29,7 @@ templ PortfolioForm(strategies []StrategyChoice, errMsg string) {
 			}
 
 			<form class="space-y-4" method="POST" action="/portfolios">
-				<input type="hidden" name="csrf" value={ CSRFFromContext(ctx) }/>
+				<input type="hidden" name="_csrf" value={ CSRFFromContext(ctx) }/>
 				<div class="form-control">
 					<label class="label" for="name"><span class="label-text">Portfolio name</span></label>
 					<input class="input input-bordered" type="text" name="name" id="name" required maxlength="120"/>

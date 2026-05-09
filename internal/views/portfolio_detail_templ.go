@@ -431,14 +431,14 @@ func PortfolioDetail(d PortfolioDetailData) templ.Component {
 					return templ_7745c5c3_Err
 				}
 			}
-			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</section><section class=\"card bg-base-100 shadow-sm\"><div class=\"card-body p-4 sm:p-5\"><h2 class=\"text-lg font-semibold mb-2\">Lifecycle</h2><form method=\"POST\" class=\"flex flex-wrap gap-2\"><input type=\"hidden\" name=\"csrf\" value=\"")
+			templ_7745c5c3_Err = templruntime.WriteString(templ_7745c5c3_Buffer, 33, "</section><section class=\"card bg-base-100 shadow-sm\"><div class=\"card-body p-4 sm:p-5\"><h2 class=\"text-lg font-semibold mb-2\">Lifecycle</h2><form method=\"POST\" class=\"flex flex-wrap gap-2\"><input type=\"hidden\" name=\"_csrf\" value=\"")
 			if templ_7745c5c3_Err != nil {
 				return templ_7745c5c3_Err
 			}
 			var templ_7745c5c3_Var28 string
 			templ_7745c5c3_Var28, templ_7745c5c3_Err = templ.JoinStringErrs(CSRFFromContext(ctx))
 			if templ_7745c5c3_Err != nil {
-				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/portfolio_detail.templ`, Line: 185, Col: 67}
+				return templ.Error{Err: templ_7745c5c3_Err, FileName: `internal/views/portfolio_detail.templ`, Line: 185, Col: 68}
 			}
 			_, templ_7745c5c3_Err = templ_7745c5c3_Buffer.WriteString(templ.EscapeString(templ_7745c5c3_Var28))
 			if templ_7745c5c3_Err != nil {

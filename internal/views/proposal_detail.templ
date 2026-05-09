@@ -31,7 +31,7 @@ templ ProposalDetail(d ProposalDetailData) {
 			      method="POST"
 			      action={ templ.SafeURL(fmt.Sprintf("/portfolios/%d/proposals/%d/accept", d.Portfolio.ID, d.Proposal.ID)) }
 			      class="space-y-4">
-				<input type="hidden" name="csrf" value={ CSRFFromContext(ctx) }/>
+				<input type="hidden" name="_csrf" value={ CSRFFromContext(ctx) }/>
 
 				<div class="card bg-base-100 shadow-sm">
 					<div class="card-body p-4 sm:p-5 space-y-3">
