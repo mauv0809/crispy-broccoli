@@ -41,7 +41,7 @@ func seedPortfolio(t *testing.T, pool any) (*portfolio.Portfolio, int64) {
 	if err != nil {
 		t.Fatalf("seed strategy: %v", err)
 	}
-	if err := sRepo.Verify(context.Background(), int64(s.ID)); err != nil {
+	if err := sRepo.Verify(context.Background(), s.ID); err != nil {
 		t.Fatalf("verify strategy: %v", err)
 	}
 	got, _ := sRepo.GetByID(context.Background(), s.ID)
@@ -53,7 +53,7 @@ func seedPortfolio(t *testing.T, pool any) (*portfolio.Portfolio, int64) {
 		UserID:            uid,
 		Name:              t.Name() + "-pf",
 		StartingCapital:   decimal.NewFromInt(10000),
-		StrategyID:        int64(s.ID),
+		StrategyID:        s.ID,
 		StrategyVersionID: *got.CurrentVersionID,
 		Cadence:           strategy.CadenceQuarterly,
 	})

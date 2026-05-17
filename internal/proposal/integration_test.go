@@ -53,7 +53,7 @@ func TestEndToEnd_CreateProposeAcceptRebalance(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed strategy: %v", err)
 	}
-	if err := sRepo.Verify(ctx, int64(s.ID)); err != nil {
+	if err := sRepo.Verify(ctx, s.ID); err != nil {
 		t.Fatalf("verify strategy: %v", err)
 	}
 
@@ -71,7 +71,7 @@ func TestEndToEnd_CreateProposeAcceptRebalance(t *testing.T) {
 		UserID:          uid,
 		Name:            "E2E",
 		StartingCapital: decimal.NewFromInt(10000),
-		StrategyID:      int64(s.ID),
+		StrategyID:      s.ID,
 	})
 	if err != nil {
 		t.Fatalf("create portfolio: %v", err)

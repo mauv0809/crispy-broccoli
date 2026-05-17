@@ -84,7 +84,7 @@ func seedVerifiedStrategy(t *testing.T, sRepo *strategy.Repository, uid int64) *
 	if err != nil {
 		t.Fatalf("seed strategy: %v", err)
 	}
-	if err := sRepo.Verify(context.Background(), int64(s.ID)); err != nil {
+	if err := sRepo.Verify(context.Background(), s.ID); err != nil {
 		t.Fatalf("verify: %v", err)
 	}
 	got, _ := sRepo.GetByID(context.Background(), s.ID)
@@ -108,7 +108,7 @@ func TestPortfolios_Create_RedirectsToProposalReview(t *testing.T) {
 	form := url.Values{}
 	form.Set("name", "Test")
 	form.Set("starting_capital", "10000")
-	form.Set("strategy_id", strconv.FormatInt(int64(s.ID), 10))
+	form.Set("strategy_id", strconv.FormatInt(s.ID, 10))
 	form.Set("cadence", "quarterly")
 
 	req := httptest.NewRequest(http.MethodPost, "/portfolios", strings.NewReader(form.Encode()))
@@ -138,7 +138,7 @@ func TestPortfolios_Create_DraftStrategyRendersError(t *testing.T) {
 	form := url.Values{}
 	form.Set("name", "Draft")
 	form.Set("starting_capital", "5000")
-	form.Set("strategy_id", strconv.FormatInt(int64(s.ID), 10))
+	form.Set("strategy_id", strconv.FormatInt(s.ID, 10))
 
 	req := httptest.NewRequest(http.MethodPost, "/portfolios", strings.NewReader(form.Encode()))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
@@ -163,7 +163,7 @@ func TestPortfolios_Detail_NonOwnerGets404(t *testing.T) {
 	form := url.Values{}
 	form.Set("name", "Owned")
 	form.Set("starting_capital", "1000")
-	form.Set("strategy_id", strconv.FormatInt(int64(s.ID), 10))
+	form.Set("strategy_id", strconv.FormatInt(s.ID, 10))
 	req := httptest.NewRequest(http.MethodPost, "/portfolios", strings.NewReader(form.Encode()))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 	c, rec := requestWithUser(req, uid, false)
@@ -202,7 +202,7 @@ func TestPortfolios_Detail_AdminCanAccessAnyone(t *testing.T) {
 	form := url.Values{}
 	form.Set("name", "Owned-by-uid")
 	form.Set("starting_capital", "1000")
-	form.Set("strategy_id", strconv.FormatInt(int64(s.ID), 10))
+	form.Set("strategy_id", strconv.FormatInt(s.ID, 10))
 	req := httptest.NewRequest(http.MethodPost, "/portfolios", strings.NewReader(form.Encode()))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 	c, rec := requestWithUser(req, uid, false)
@@ -234,7 +234,7 @@ func TestPortfolios_PauseResume(t *testing.T) {
 	form := url.Values{}
 	form.Set("name", "PR-test")
 	form.Set("starting_capital", "1000")
-	form.Set("strategy_id", strconv.FormatInt(int64(s.ID), 10))
+	form.Set("strategy_id", strconv.FormatInt(s.ID, 10))
 	req := httptest.NewRequest(http.MethodPost, "/portfolios", strings.NewReader(form.Encode()))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 	c, rec := requestWithUser(req, uid, false)
@@ -276,7 +276,7 @@ func TestPortfolios_Pause_NonOwner404s(t *testing.T) {
 	form := url.Values{}
 	form.Set("name", "Owned")
 	form.Set("starting_capital", "1000")
-	form.Set("strategy_id", strconv.FormatInt(int64(s.ID), 10))
+	form.Set("strategy_id", strconv.FormatInt(s.ID, 10))
 	req := httptest.NewRequest(http.MethodPost, "/portfolios", strings.NewReader(form.Encode()))
 	req.Header.Set(echo.HeaderContentType, echo.MIMEApplicationForm)
 	c, rec := requestWithUser(req, uid, false)

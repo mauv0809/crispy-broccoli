@@ -66,7 +66,7 @@ func (h *ProposalsHandler) Detail(c echo.Context) error {
 	}
 
 	var stratName string
-	if s, err := h.strategies.GetByID(ctx, int(port.StrategyID)); err == nil {
+	if s, err := h.strategies.GetByID(ctx, port.StrategyID); err == nil {
 		stratName = s.Name
 	}
 

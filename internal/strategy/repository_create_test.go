@@ -26,7 +26,7 @@ func TestCreate_SeedsV1AndStartsAsDraft(t *testing.T) {
 	if s.CurrentVersionID == nil {
 		t.Fatal("CurrentVersionID is nil; want pointer to v1 id")
 	}
-	all, err := versions.ListByStrategy(ctx, int64(s.ID))
+	all, err := versions.ListByStrategy(ctx, s.ID)
 	if err != nil {
 		t.Fatalf("list versions: %v", err)
 	}

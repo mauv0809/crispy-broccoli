@@ -83,7 +83,7 @@ func (m *ProposalMailer) loadContext(ctx context.Context, proposalID int64) (
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("loading user: %w", err)
 	}
-	strat, err := m.strategies.GetByID(ctx, int(port.StrategyID))
+	strat, err := m.strategies.GetByID(ctx, port.StrategyID)
 	if err != nil {
 		return nil, nil, nil, nil, fmt.Errorf("loading strategy: %w", err)
 	}

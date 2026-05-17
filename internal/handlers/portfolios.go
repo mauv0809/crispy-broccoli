@@ -74,7 +74,7 @@ func (h *PortfoliosHandler) List(c echo.Context) error {
 	for _, p := range ports {
 		// Strategy name (best-effort; UI tolerates missing).
 		var strategyName string
-		if strat, err := h.strategies.GetByID(ctx, int(p.StrategyID)); err == nil {
+		if strat, err := h.strategies.GetByID(ctx, p.StrategyID); err == nil {
 			strategyName = strat.Name
 		}
 
@@ -118,7 +118,7 @@ func (h *PortfoliosHandler) NewForm(c echo.Context) error {
 	choices := make([]views.StrategyChoice, len(verified))
 	for i, s := range verified {
 		choices[i] = views.StrategyChoice{
-			ID: int64(s.ID), Name: s.Name, DefaultCadence: s.DefaultCadence,
+			ID: s.ID, Name: s.Name, DefaultCadence: s.DefaultCadence,
 		}
 	}
 	return Render(c, http.StatusOK, views.PortfolioForm(choices, ""))
@@ -236,7 +236,7 @@ func (h *PortfoliosHandler) renderFormError(c echo.Context, msg string) error {
 	choices := make([]views.StrategyChoice, len(verified))
 	for i, s := range verified {
 		choices[i] = views.StrategyChoice{
-			ID: int64(s.ID), Name: s.Name, DefaultCadence: s.DefaultCadence,
+			ID: s.ID, Name: s.Name, DefaultCadence: s.DefaultCadence,
 		}
 	}
 	return Render(c, http.StatusBadRequest, views.PortfolioForm(choices, msg))
@@ -264,7 +264,7 @@ func (h *PortfoliosHandler) Detail(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusNotFound)
 	}
 
-	strat, _ := h.strategies.GetByID(ctx, int(p.StrategyID))
+	strat, _ := h.strategies.GetByID(ctx, p.StrategyID)
 	var ver *strategy.Version
 	if v, err := h.versions.Get(ctx, p.StrategyVersionID); err == nil {
 		ver = v

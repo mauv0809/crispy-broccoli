@@ -62,7 +62,7 @@ func seedFixture(t *testing.T) (
 	if err != nil {
 		t.Fatalf("seed strategy: %v", err)
 	}
-	if err := sRepo.Verify(ctx, int64(s.ID)); err != nil {
+	if err := sRepo.Verify(ctx, s.ID); err != nil {
 		t.Fatalf("verify: %v", err)
 	}
 	got, _ := sRepo.GetByID(ctx, s.ID)
@@ -71,7 +71,7 @@ func seedFixture(t *testing.T) (
 		UserID:            uid,
 		Name:              "Quality Compounders",
 		StartingCapital:   decimal.NewFromInt(10000),
-		StrategyID:        int64(s.ID),
+		StrategyID:        s.ID,
 		StrategyVersionID: *got.CurrentVersionID,
 		Cadence:           strategy.CadenceQuarterly,
 	})

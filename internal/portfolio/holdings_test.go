@@ -21,7 +21,7 @@ func seedPortfolio(t *testing.T, pool any) *portfolio.Portfolio {
 		UserID:            systemUserID(t, pool),
 		Name:              t.Name() + "-pf",
 		StartingCapital:   decimal.NewFromInt(10000),
-		StrategyID:        int64(s.ID),
+		StrategyID:        s.ID,
 		StrategyVersionID: vID,
 		Cadence:           strategy.CadenceQuarterly,
 	})

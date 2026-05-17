@@ -82,7 +82,7 @@ func seedPortfolioForScheduler(t *testing.T, pool *pgxpool.Pool) (*portfolio.Por
 	if err != nil {
 		t.Fatalf("seed strategy: %v", err)
 	}
-	if err := sRepo.Verify(ctx, int64(s.ID)); err != nil {
+	if err := sRepo.Verify(ctx, s.ID); err != nil {
 		t.Fatalf("verify: %v", err)
 	}
 	got, _ := sRepo.GetByID(ctx, s.ID)
@@ -91,7 +91,7 @@ func seedPortfolioForScheduler(t *testing.T, pool *pgxpool.Pool) (*portfolio.Por
 		UserID:            uid,
 		Name:              t.Name() + "-pf",
 		StartingCapital:   decimal.NewFromInt(10000),
-		StrategyID:        int64(s.ID),
+		StrategyID:        s.ID,
 		StrategyVersionID: *got.CurrentVersionID,
 		Cadence:           strategy.CadenceQuarterly,
 	})
@@ -230,12 +230,12 @@ func TestWorker_RunOnce_SkipsPausedAndFuturePortfolios(t *testing.T) {
 		uid := systemUserID(t, pool)
 		rules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
 		s, _ := sRepo.Create(ctx, strategy.CreateStrategyRequest{Name: name + "-strat", Rules: rules}, uid)
-		_ = sRepo.Verify(ctx, int64(s.ID))
+		_ = sRepo.Verify(ctx, s.ID)
 		got, _ := sRepo.GetByID(ctx, s.ID)
 		p, _ := pRepo.Create(ctx, portfolio.CreatePortfolioRequest{
 			UserID: uid, Name: name,
 			StartingCapital: decimal.NewFromInt(10000),
-			StrategyID:      int64(s.ID), StrategyVersionID: *got.CurrentVersionID,
+			StrategyID:      s.ID, StrategyVersionID: *got.CurrentVersionID,
 			Cadence: strategy.CadenceQuarterly,
 		})
 		return p

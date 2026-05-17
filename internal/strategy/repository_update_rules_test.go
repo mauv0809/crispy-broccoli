@@ -26,7 +26,7 @@ func TestUpdateRules_CreatesNewVersionAndDemotes(t *testing.T) {
 		t.Fatalf("create: %v", err)
 	}
 	// Promote to verified so we can observe the demotion.
-	if err := repo.Verify(ctx, int64(s.ID)); err != nil {
+	if err := repo.Verify(ctx, s.ID); err != nil {
 		t.Fatalf("verify: %v", err)
 	}
 
@@ -51,7 +51,7 @@ func TestUpdateRules_CreatesNewVersionAndDemotes(t *testing.T) {
 		t.Fatal("CurrentVersionID is nil after update")
 	}
 
-	all, err := versions.ListByStrategy(ctx, int64(s.ID))
+	all, err := versions.ListByStrategy(ctx, s.ID)
 	if err != nil {
 		t.Fatalf("list: %v", err)
 	}
@@ -100,7 +100,7 @@ func TestUpdateRules_OnArchivedStrategyAlsoWorks(t *testing.T) {
 
 	original := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
 	s, _ := repo.Create(ctx, strategy.CreateStrategyRequest{Name: "Arch edit", Rules: original}, uid)
-	_ = repo.Archive(ctx, int64(s.ID))
+	_ = repo.Archive(ctx, s.ID)
 
 	newRules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 12, Dimension: "MRQ"}
 	if err := repo.UpdateRules(ctx, s.ID, newRules, uid); err != nil {

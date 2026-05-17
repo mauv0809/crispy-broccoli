@@ -45,7 +45,7 @@ type CreatePortfolioInput struct {
 // CreatePortfolio validates the strategy, pins its current version, resolves
 // cadence, and creates the portfolio.
 func (s *Service) CreatePortfolio(ctx context.Context, in CreatePortfolioInput) (*Portfolio, error) {
-	strat, err := s.strategies.GetByID(ctx, int(in.StrategyID))
+	strat, err := s.strategies.GetByID(ctx, in.StrategyID)
 	if err != nil {
 		return nil, fmt.Errorf("loading strategy: %w", err)
 	}
@@ -70,7 +70,7 @@ func (s *Service) CreatePortfolio(ctx context.Context, in CreatePortfolioInput) 
 		UserID:            in.UserID,
 		Name:              in.Name,
 		StartingCapital:   in.StartingCapital,
-		StrategyID:        int64(strat.ID),
+		StrategyID:        strat.ID,
 		StrategyVersionID: *strat.CurrentVersionID,
 		Cadence:           *cadence,
 	})

@@ -53,7 +53,7 @@ func (r *Repository) Create(ctx context.Context, req CreateStrategyRequest, crea
 		}
 
 		// 2. Seed v1.
-		v1, err := versions.CreateTx(ctx, tx, int64(s.ID), rulesJSON, createdBy)
+		v1, err := versions.CreateTx(ctx, tx, s.ID, rulesJSON, createdBy)
 		if err != nil {
 			return fmt.Errorf("seeding v1: %w", err)
 		}
@@ -289,7 +289,7 @@ func (r *Repository) CreateDefaultStrategy(ctx context.Context, name, descriptio
 			return fmt.Errorf("inserting default strategy: %w", err)
 		}
 
-		v1, err := versions.CreateTx(ctx, tx, int64(s.ID), rulesJSON, sysUserID)
+		v1, err := versions.CreateTx(ctx, tx, s.ID, rulesJSON, sysUserID)
 		if err != nil {
 			return fmt.Errorf("seeding v1 for default: %w", err)
 		}
@@ -358,13 +358,13 @@ func (r *Repository) Archive(ctx context.Context, strategyID int64) error {
 // Existing portfolios are unaffected: each portfolio pins a specific
 // strategy_version_id, so they continue rebalancing on their frozen rules
 // regardless of edits made through this method.
-func (r *Repository) UpdateRules(ctx context.Context, id int, rules Rules, updatedBy int64) error {
+func (r *Repository) UpdateRules(ctx context.Context, id int64, rules Rules, updatedBy int64) error {
 	rulesJSON, err := json.Marshal(rules)
 	if err != nil {
 		return fmt.Errorf("marshaling rules: %w", err)
 	}
 	return dbutil.RunInTx(ctx, r.pool, func(tx dbutil.DBTX) error {
-		v, err := r.versions.CreateTx(ctx, tx, int64(id), rulesJSON, updatedBy)
+		v, err := r.versions.CreateTx(ctx, tx, id, rulesJSON, updatedBy)
 		if err != nil {
 			return err
 		}

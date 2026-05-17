@@ -28,7 +28,7 @@ func TestService_CreatePortfolio_VerifiedStrategySucceeds(t *testing.T) {
 	rules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
 	cadence := strategy.CadenceQuarterly
 	s, _ := sRepo.Create(ctx, strategy.CreateStrategyRequest{Name: t.Name(), Rules: rules, DefaultCadence: &cadence}, systemUserID(t, pool))
-	if err := sRepo.Verify(ctx, int64(s.ID)); err != nil {
+	if err := sRepo.Verify(ctx, s.ID); err != nil {
 		t.Fatalf("verify: %v", err)
 	}
 
@@ -36,7 +36,7 @@ func TestService_CreatePortfolio_VerifiedStrategySucceeds(t *testing.T) {
 		UserID:          systemUserID(t, pool),
 		Name:            "Test Portfolio",
 		StartingCapital: decimal.NewFromInt(10000),
-		StrategyID:      int64(s.ID),
+		StrategyID:      s.ID,
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)
@@ -61,7 +61,7 @@ func TestService_CreatePortfolio_DraftStrategyFails(t *testing.T) {
 	_, err := svc.CreatePortfolio(ctx, portfolio.CreatePortfolioInput{
 		UserID: systemUserID(t, pool), Name: "T",
 		StartingCapital: decimal.NewFromInt(1000),
-		StrategyID:      int64(s.ID),
+		StrategyID:      s.ID,
 	})
 	if !errors.Is(err, portfolio.ErrStrategyNotVerified) {
 		t.Errorf("err = %v, want ErrStrategyNotVerified", err)
@@ -75,13 +75,13 @@ func TestService_CreatePortfolio_ArchivedStrategyFails(t *testing.T) {
 
 	rules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
 	s, _ := sRepo.Create(ctx, strategy.CreateStrategyRequest{Name: t.Name(), Rules: rules}, systemUserID(t, pool))
-	_ = sRepo.Verify(ctx, int64(s.ID))
-	_ = sRepo.Archive(ctx, int64(s.ID))
+	_ = sRepo.Verify(ctx, s.ID)
+	_ = sRepo.Archive(ctx, s.ID)
 
 	_, err := svc.CreatePortfolio(ctx, portfolio.CreatePortfolioInput{
 		UserID: systemUserID(t, pool), Name: "T",
 		StartingCapital: decimal.NewFromInt(1000),
-		StrategyID:      int64(s.ID),
+		StrategyID:      s.ID,
 	})
 	if !errors.Is(err, portfolio.ErrStrategyNotVerified) {
 		t.Errorf("err = %v, want ErrStrategyNotVerified (archived treated like unverified)", err)
@@ -96,13 +96,13 @@ func TestService_CreatePortfolio_OverrideCadence(t *testing.T) {
 	defC := strategy.CadenceQuarterly
 	rules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
 	s, _ := sRepo.Create(ctx, strategy.CreateStrategyRequest{Name: t.Name(), Rules: rules, DefaultCadence: &defC}, systemUserID(t, pool))
-	_ = sRepo.Verify(ctx, int64(s.ID))
+	_ = sRepo.Verify(ctx, s.ID)
 
 	override := strategy.CadenceMonthly
 	p, err := svc.CreatePortfolio(ctx, portfolio.CreatePortfolioInput{
 		UserID: systemUserID(t, pool), Name: t.Name(),
 		StartingCapital: decimal.NewFromInt(1000),
-		StrategyID:      int64(s.ID),
+		StrategyID:      s.ID,
 		CadenceOverride: &override,
 	})
 	if err != nil {
@@ -120,12 +120,12 @@ func TestService_CreatePortfolio_NoCadenceFails(t *testing.T) {
 
 	rules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
 	s, _ := sRepo.Create(ctx, strategy.CreateStrategyRequest{Name: t.Name(), Rules: rules}, systemUserID(t, pool)) // no DefaultCadence
-	_ = sRepo.Verify(ctx, int64(s.ID))
+	_ = sRepo.Verify(ctx, s.ID)
 
 	_, err := svc.CreatePortfolio(ctx, portfolio.CreatePortfolioInput{
 		UserID: systemUserID(t, pool), Name: t.Name(),
 		StartingCapital: decimal.NewFromInt(1000),
-		StrategyID:      int64(s.ID),
+		StrategyID:      s.ID,
 		// no CadenceOverride and no DefaultCadence on strategy
 	})
 	if !errors.Is(err, portfolio.ErrCadenceMissing) {
@@ -141,12 +141,12 @@ func TestService_SetStatus_Passthrough(t *testing.T) {
 	cadence := strategy.CadenceMonthly
 	rules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
 	s, _ := sRepo.Create(ctx, strategy.CreateStrategyRequest{Name: t.Name(), Rules: rules, DefaultCadence: &cadence}, systemUserID(t, pool))
-	_ = sRepo.Verify(ctx, int64(s.ID))
+	_ = sRepo.Verify(ctx, s.ID)
 
 	p, err := svc.CreatePortfolio(ctx, portfolio.CreatePortfolioInput{
 		UserID: systemUserID(t, pool), Name: t.Name(),
 		StartingCapital: decimal.NewFromInt(1000),
-		StrategyID:      int64(s.ID),
+		StrategyID:      s.ID,
 	})
 	if err != nil {
 		t.Fatalf("create: %v", err)

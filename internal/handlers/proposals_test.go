@@ -41,13 +41,13 @@ func seedProposalFixture(t *testing.T) (
 
 	rules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
 	s, _ := sRepo.Create(ctx, strategy.CreateStrategyRequest{Name: t.Name() + "-strat", Rules: rules}, uid)
-	_ = sRepo.Verify(ctx, int64(s.ID))
+	_ = sRepo.Verify(ctx, s.ID)
 	got, _ := sRepo.GetByID(ctx, s.ID)
 
 	port, _ := pRepo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: t.Name() + "-pf",
 		StartingCapital: decimal.NewFromInt(10000),
-		StrategyID:      int64(s.ID), StrategyVersionID: *got.CurrentVersionID,
+		StrategyID:      s.ID, StrategyVersionID: *got.CurrentVersionID,
 		Cadence: strategy.CadenceQuarterly,
 	})
 
@@ -213,11 +213,11 @@ func TestProposals_Accept_PartialWithSkipped(t *testing.T) {
 
 	rules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
 	s, _ := sRepo.Create(ctx, strategy.CreateStrategyRequest{Name: t.Name() + "-strat", Rules: rules}, uid)
-	_ = sRepo.Verify(ctx, int64(s.ID))
+	_ = sRepo.Verify(ctx, s.ID)
 	got, _ := sRepo.GetByID(ctx, s.ID)
 	port, _ := pRepo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "p", StartingCapital: decimal.NewFromInt(10000),
-		StrategyID: int64(s.ID), StrategyVersionID: *got.CurrentVersionID,
+		StrategyID: s.ID, StrategyVersionID: *got.CurrentVersionID,
 		Cadence: strategy.CadenceQuarterly,
 	})
 	for _, tk := range []string{"AAPL", "MSFT"} {

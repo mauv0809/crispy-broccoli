@@ -212,7 +212,7 @@ func TestHTTP_PortfolioCreate_HappyPath(t *testing.T) {
 	if err != nil {
 		t.Fatalf("seed strategy: %v", err)
 	}
-	if err := app.strategyRepo.Verify(context.Background(), int64(s.ID)); err != nil {
+	if err := app.strategyRepo.Verify(context.Background(), s.ID); err != nil {
 		t.Fatalf("verify strategy: %v", err)
 	}
 
@@ -231,7 +231,7 @@ func TestHTTP_PortfolioCreate_HappyPath(t *testing.T) {
 	form.Set("_csrf", token)
 	form.Set("name", "Smoke")
 	form.Set("starting_capital", "10000")
-	form.Set("strategy_id", strconv.Itoa(s.ID))
+	form.Set("strategy_id", strconv.FormatInt(s.ID, 10))
 	form.Set("cadence", "quarterly")
 
 	postResp, err := app.client.PostForm(app.server.URL+"/portfolios", form)
@@ -299,7 +299,7 @@ func TestHTTP_StrategyVerify_HappyPath(t *testing.T) {
 	}
 
 	req, _ := http.NewRequest(http.MethodPost,
-		app.server.URL+"/strategies/"+strconv.Itoa(s.ID)+"/verify", nil)
+		app.server.URL+"/strategies/"+strconv.FormatInt(s.ID, 10)+"/verify", nil)
 	req.Header.Set("X-CSRF-Token", token)
 
 	resp, err := app.client.Do(req)
@@ -320,7 +320,7 @@ func TestHTTP_StrategyVerify_HappyPath(t *testing.T) {
 
 	// Negative: same request without the header should be rejected.
 	resp2, err := app.client.Post(
-		app.server.URL+"/strategies/"+strconv.Itoa(s.ID)+"/verify",
+		app.server.URL+"/strategies/"+strconv.FormatInt(s.ID, 10)+"/verify",
 		"", nil)
 	if err != nil {
 		t.Fatalf("POST without token: %v", err)
@@ -343,7 +343,7 @@ func TestHTTP_PortfolioPause_FullFlow(t *testing.T) {
 	rules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
 	s, _ := app.strategyRepo.Create(context.Background(),
 		strategy.CreateStrategyRequest{Name: t.Name() + "-strat", Rules: rules, DefaultCadence: &cadence}, app.user.ID)
-	_ = app.strategyRepo.Verify(context.Background(), int64(s.ID))
+	_ = app.strategyRepo.Verify(context.Background(), s.ID)
 
 	getForm, _ := app.client.Get(app.server.URL + "/portfolios/new")
 	formBody, _ := io.ReadAll(getForm.Body)
@@ -354,7 +354,7 @@ func TestHTTP_PortfolioPause_FullFlow(t *testing.T) {
 	form.Set("_csrf", token)
 	form.Set("name", "Pause-test")
 	form.Set("starting_capital", "1000")
-	form.Set("strategy_id", strconv.Itoa(s.ID))
+	form.Set("strategy_id", strconv.FormatInt(s.ID, 10))
 
 	createResp, _ := app.client.PostForm(app.server.URL+"/portfolios", form)
 	createResp.Body.Close()

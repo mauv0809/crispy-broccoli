@@ -34,10 +34,10 @@ func TestStrategyHandler_Verify_FromDraftSucceeds(t *testing.T) {
 	s, _ := repo.Create(context.Background(),
 		strategy.CreateStrategyRequest{Name: "VerifyDraft", Rules: rules}, uid)
 
-	req := httptest.NewRequest(http.MethodPost, "/strategies/"+strconv.Itoa(s.ID)+"/verify", nil)
+	req := httptest.NewRequest(http.MethodPost, "/strategies/"+strconv.FormatInt(s.ID, 10)+"/verify", nil)
 	c, rec := requestWithUser(req, uid, false)
 	c.SetParamNames("id")
-	c.SetParamValues(strconv.Itoa(s.ID))
+	c.SetParamValues(strconv.FormatInt(s.ID, 10))
 
 	if err := h.Verify(c); err != nil {
 		t.Fatalf("verify: %v", err)
@@ -58,12 +58,12 @@ func TestStrategyHandler_Verify_FromArchivedReturns409(t *testing.T) {
 	rules := strategy.Rules{Filters: []strategy.Filter{}, Ranking: []strategy.Ranking{}, Limit: 6, Dimension: "MRQ"}
 	s, _ := repo.Create(context.Background(),
 		strategy.CreateStrategyRequest{Name: "ArchVerify", Rules: rules}, uid)
-	_ = repo.Archive(context.Background(), int64(s.ID))
+	_ = repo.Archive(context.Background(), s.ID)
 
-	req := httptest.NewRequest(http.MethodPost, "/strategies/"+strconv.Itoa(s.ID)+"/verify", nil)
+	req := httptest.NewRequest(http.MethodPost, "/strategies/"+strconv.FormatInt(s.ID, 10)+"/verify", nil)
 	c, _ := requestWithUser(req, uid, false)
 	c.SetParamNames("id")
-	c.SetParamValues(strconv.Itoa(s.ID))
+	c.SetParamValues(strconv.FormatInt(s.ID, 10))
 
 	err := h.Verify(c)
 	httpErr, ok := err.(*echo.HTTPError)
@@ -79,10 +79,10 @@ func TestStrategyHandler_Archive_RedirectsAndUpdatesStatus(t *testing.T) {
 	s, _ := repo.Create(context.Background(),
 		strategy.CreateStrategyRequest{Name: "ArchTest", Rules: rules}, uid)
 
-	req := httptest.NewRequest(http.MethodPost, "/strategies/"+strconv.Itoa(s.ID)+"/archive", nil)
+	req := httptest.NewRequest(http.MethodPost, "/strategies/"+strconv.FormatInt(s.ID, 10)+"/archive", nil)
 	c, rec := requestWithUser(req, uid, false)
 	c.SetParamNames("id")
-	c.SetParamValues(strconv.Itoa(s.ID))
+	c.SetParamValues(strconv.FormatInt(s.ID, 10))
 
 	if err := h.Archive(c); err != nil {
 		t.Fatalf("archive: %v", err)
@@ -103,10 +103,10 @@ func TestStrategyHandler_ListVersions_ReturnsJSONArray(t *testing.T) {
 	s, _ := repo.Create(context.Background(),
 		strategy.CreateStrategyRequest{Name: "VerList", Rules: rules}, uid)
 
-	req := httptest.NewRequest(http.MethodGet, "/strategies/"+strconv.Itoa(s.ID)+"/versions", nil)
+	req := httptest.NewRequest(http.MethodGet, "/strategies/"+strconv.FormatInt(s.ID, 10)+"/versions", nil)
 	c, rec := requestWithUser(req, uid, false)
 	c.SetParamNames("id")
-	c.SetParamValues(strconv.Itoa(s.ID))
+	c.SetParamValues(strconv.FormatInt(s.ID, 10))
 
 	if err := h.ListVersions(c); err != nil {
 		t.Fatalf("list versions: %v", err)

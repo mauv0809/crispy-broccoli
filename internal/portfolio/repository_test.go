@@ -38,7 +38,7 @@ func seedStrategy(t *testing.T, pool any) (*strategy.Strategy, int64) {
 	if err != nil {
 		t.Fatalf("seed strategy: %v", err)
 	}
-	if err := repo.Verify(context.Background(), int64(s.ID)); err != nil {
+	if err := repo.Verify(context.Background(), s.ID); err != nil {
 		t.Fatalf("verify: %v", err)
 	}
 	got, _ := repo.GetByID(context.Background(), s.ID)
@@ -58,7 +58,7 @@ func TestPortfolio_CreateAndGet(t *testing.T) {
 		UserID:            systemUserID(t, pool),
 		Name:              "My Portfolio",
 		StartingCapital:   decimal.NewFromInt(50000),
-		StrategyID:        int64(s.ID),
+		StrategyID:        s.ID,
 		StrategyVersionID: vID,
 		Cadence:           strategy.CadenceQuarterly,
 	})
@@ -107,7 +107,7 @@ func TestPortfolio_ListByUser(t *testing.T) {
 		_, err := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 			UserID: uid, Name: name,
 			StartingCapital:   decimal.NewFromInt(1000),
-			StrategyID:        int64(s.ID),
+			StrategyID:        s.ID,
 			StrategyVersionID: vID,
 			Cadence:           strategy.CadenceMonthly,
 		})
@@ -135,13 +135,13 @@ func TestPortfolio_ListByUserExcludesArchived(t *testing.T) {
 	a, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "alive",
 		StartingCapital: decimal.NewFromInt(1000),
-		StrategyID:      int64(s.ID), StrategyVersionID: vID,
+		StrategyID:      s.ID, StrategyVersionID: vID,
 		Cadence: strategy.CadenceMonthly,
 	})
 	arc, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "to-archive",
 		StartingCapital: decimal.NewFromInt(1000),
-		StrategyID:      int64(s.ID), StrategyVersionID: vID,
+		StrategyID:      s.ID, StrategyVersionID: vID,
 		Cadence: strategy.CadenceMonthly,
 	})
 	if err := repo.SetStatus(ctx, arc.ID, portfolio.StatusArchived); err != nil {
@@ -164,7 +164,7 @@ func TestPortfolio_SetNextRebalanceDue(t *testing.T) {
 	p, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "due",
 		StartingCapital: decimal.NewFromInt(1000),
-		StrategyID:      int64(s.ID), StrategyVersionID: vID,
+		StrategyID:      s.ID, StrategyVersionID: vID,
 		Cadence: strategy.CadenceQuarterly,
 	})
 
@@ -195,7 +195,7 @@ func TestPortfolio_FindDueForRebalance(t *testing.T) {
 	dueNow, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "due-now",
 		StartingCapital: decimal.NewFromInt(1000),
-		StrategyID:      int64(s.ID), StrategyVersionID: vID,
+		StrategyID:      s.ID, StrategyVersionID: vID,
 		Cadence: strategy.CadenceQuarterly,
 	})
 	_ = repo.SetNextRebalanceDue(ctx, pool, dueNow.ID, now.Add(-time.Hour))
@@ -203,7 +203,7 @@ func TestPortfolio_FindDueForRebalance(t *testing.T) {
 	dueFuture, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "due-future",
 		StartingCapital: decimal.NewFromInt(1000),
-		StrategyID:      int64(s.ID), StrategyVersionID: vID,
+		StrategyID:      s.ID, StrategyVersionID: vID,
 		Cadence: strategy.CadenceQuarterly,
 	})
 	_ = repo.SetNextRebalanceDue(ctx, pool, dueFuture.ID, now.Add(time.Hour))
@@ -211,7 +211,7 @@ func TestPortfolio_FindDueForRebalance(t *testing.T) {
 	pausedDue, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "paused-due",
 		StartingCapital: decimal.NewFromInt(1000),
-		StrategyID:      int64(s.ID), StrategyVersionID: vID,
+		StrategyID:      s.ID, StrategyVersionID: vID,
 		Cadence: strategy.CadenceQuarterly,
 	})
 	_ = repo.SetNextRebalanceDue(ctx, pool, pausedDue.ID, now.Add(-time.Hour))
