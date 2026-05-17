@@ -447,6 +447,49 @@ paths:
       summary: Ingest daily stock prices
       tags:
       - ingestion
+  /admin/ingest/prices/nasdaq:
+    post:
+      consumes:
+      - application/json
+      description: Fetches daily prices from SHARADAR/SEP — bulk-friendly alternative
+        to /admin/ingest/prices (Tiingo)
+      parameters:
+      - description: Comma-separated tickers (defaults to batch of stocks needing
+          prices)
+        in: query
+        name: ticker
+        type: string
+      - description: Max tickers to fetch (default 200; SEP can handle hundreds per
+          request)
+        in: query
+        name: limit
+        type: integer
+      - description: Consider data stale after N days (default 3)
+        in: query
+        name: stale_days
+        type: integer
+      - description: Days to wait before retrying tickers with no data (default 7)
+        in: query
+        name: retry_days
+        type: integer
+      - description: Number of parallel API requests (default 4)
+        in: query
+        name: parallel
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+      summary: Ingest daily stock prices via Nasdaq Data Link
+      tags:
+      - ingestion
   /admin/ingest/sp500:
     post:
       consumes:

@@ -157,6 +157,67 @@
                 }
             }
         },
+        "/admin/ingest/prices/nasdaq": {
+            "post": {
+                "description": "Fetches daily prices from SHARADAR/SEP — bulk-friendly alternative to /admin/ingest/prices (Tiingo)",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "ingestion"
+                ],
+                "summary": "Ingest daily stock prices via Nasdaq Data Link",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "Comma-separated tickers (defaults to batch of stocks needing prices)",
+                        "name": "ticker",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Max tickers to fetch (default 200; SEP can handle hundreds per request)",
+                        "name": "limit",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Consider data stale after N days (default 3)",
+                        "name": "stale_days",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Days to wait before retrying tickers with no data (default 7)",
+                        "name": "retry_days",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "Number of parallel API requests (default 4)",
+                        "name": "parallel",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.IngestResponse"
+                        }
+                    },
+                    "503": {
+                        "description": "Service Unavailable",
+                        "schema": {
+                            "$ref": "#/definitions/internal_handlers.IngestResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/admin/ingest/sp500": {
             "post": {
                 "description": "Fetches S\u0026P 500 membership history from SHARADAR/SP500 for point-in-time backtesting",
