@@ -32,6 +32,12 @@ linters-settings:
       - fmt.Fprintf
   goimports:
     local-prefixes: github.com/mauv0809/crispy-broccoli
+  misspell:
+    # `strat` is our project-wide abbreviation for "strategy" (chosen to avoid
+    # shadowing the `strategy` package name). misspell's default dictionary
+    # treats it as a typo of "start"; allow it.
+    ignore-words:
+      - strat
 
 issues:
   # Don't lint generated files. Templ files end in _templ.go; swagger docs

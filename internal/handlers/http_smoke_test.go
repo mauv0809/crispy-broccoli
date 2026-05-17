@@ -63,7 +63,8 @@ type smokeApp struct {
 	proposalsH   *handlers.ProposalsHandler
 	strategyH    *handlers.StrategyHandler
 	strategyRepo *strategy.Repository
-	pool         interface{ /* opaque */ } // not used directly; stored for re-use in subtests
+	pool         interface { /* opaque */
+	} // not used directly; stored for re-use in subtests
 }
 
 func newSmokeApp(t *testing.T) *smokeApp {

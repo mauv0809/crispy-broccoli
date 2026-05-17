@@ -234,8 +234,8 @@ func TestWorker_RunOnce_SkipsPausedAndFuturePortfolios(t *testing.T) {
 		got, _ := sRepo.GetByID(ctx, s.ID)
 		p, _ := pRepo.Create(ctx, portfolio.CreatePortfolioRequest{
 			UserID: uid, Name: name,
-			StartingCapital:   decimal.NewFromInt(10000),
-			StrategyID:        int64(s.ID), StrategyVersionID: *got.CurrentVersionID,
+			StartingCapital: decimal.NewFromInt(10000),
+			StrategyID:      int64(s.ID), StrategyVersionID: *got.CurrentVersionID,
 			Cadence: strategy.CadenceQuarterly,
 		})
 		return p

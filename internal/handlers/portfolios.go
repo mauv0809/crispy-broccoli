@@ -54,8 +54,8 @@ type PortfoliosDeps struct {
 func NewPortfoliosHandler(d PortfoliosDeps) *PortfoliosHandler {
 	return &PortfoliosHandler{
 		pool: d.Pool, service: d.Service, portfolios: d.Portfolios, holdings: d.Holdings,
-		performance:   d.Performance,
-		proposals:     d.Proposals, strategies: d.Strategies, versions: d.Versions,
+		performance: d.Performance,
+		proposals:   d.Proposals, strategies: d.Strategies, versions: d.Versions,
 		pickGenerator: d.PickGenerator, mailer: d.Mailer,
 	}
 }

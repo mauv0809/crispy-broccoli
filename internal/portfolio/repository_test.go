@@ -134,14 +134,14 @@ func TestPortfolio_ListByUserExcludesArchived(t *testing.T) {
 
 	a, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "alive",
-		StartingCapital:   decimal.NewFromInt(1000),
-		StrategyID:        int64(s.ID), StrategyVersionID: vID,
+		StartingCapital: decimal.NewFromInt(1000),
+		StrategyID:      int64(s.ID), StrategyVersionID: vID,
 		Cadence: strategy.CadenceMonthly,
 	})
 	arc, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "to-archive",
-		StartingCapital:   decimal.NewFromInt(1000),
-		StrategyID:        int64(s.ID), StrategyVersionID: vID,
+		StartingCapital: decimal.NewFromInt(1000),
+		StrategyID:      int64(s.ID), StrategyVersionID: vID,
 		Cadence: strategy.CadenceMonthly,
 	})
 	if err := repo.SetStatus(ctx, arc.ID, portfolio.StatusArchived); err != nil {
@@ -163,8 +163,8 @@ func TestPortfolio_SetNextRebalanceDue(t *testing.T) {
 
 	p, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "due",
-		StartingCapital:   decimal.NewFromInt(1000),
-		StrategyID:        int64(s.ID), StrategyVersionID: vID,
+		StartingCapital: decimal.NewFromInt(1000),
+		StrategyID:      int64(s.ID), StrategyVersionID: vID,
 		Cadence: strategy.CadenceQuarterly,
 	})
 
@@ -194,24 +194,24 @@ func TestPortfolio_FindDueForRebalance(t *testing.T) {
 	// Three portfolios: one due in past, one due in future, one paused with past due.
 	dueNow, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "due-now",
-		StartingCapital:   decimal.NewFromInt(1000),
-		StrategyID:        int64(s.ID), StrategyVersionID: vID,
+		StartingCapital: decimal.NewFromInt(1000),
+		StrategyID:      int64(s.ID), StrategyVersionID: vID,
 		Cadence: strategy.CadenceQuarterly,
 	})
 	_ = repo.SetNextRebalanceDue(ctx, pool, dueNow.ID, now.Add(-time.Hour))
 
 	dueFuture, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "due-future",
-		StartingCapital:   decimal.NewFromInt(1000),
-		StrategyID:        int64(s.ID), StrategyVersionID: vID,
+		StartingCapital: decimal.NewFromInt(1000),
+		StrategyID:      int64(s.ID), StrategyVersionID: vID,
 		Cadence: strategy.CadenceQuarterly,
 	})
 	_ = repo.SetNextRebalanceDue(ctx, pool, dueFuture.ID, now.Add(time.Hour))
 
 	pausedDue, _ := repo.Create(ctx, portfolio.CreatePortfolioRequest{
 		UserID: uid, Name: "paused-due",
-		StartingCapital:   decimal.NewFromInt(1000),
-		StrategyID:        int64(s.ID), StrategyVersionID: vID,
+		StartingCapital: decimal.NewFromInt(1000),
+		StrategyID:      int64(s.ID), StrategyVersionID: vID,
 		Cadence: strategy.CadenceQuarterly,
 	})
 	_ = repo.SetNextRebalanceDue(ctx, pool, pausedDue.ID, now.Add(-time.Hour))
