@@ -41,7 +41,7 @@ func (r *Repository) Create(ctx context.Context, req CreateStrategyRequest, crea
 }
 
 // GetByID retrieves a strategy by ID
-func (r *Repository) GetByID(ctx context.Context, id int) (*Strategy, error) {
+func (r *Repository) GetByID(ctx context.Context, id int64) (*Strategy, error) {
 	var s Strategy
 	err := r.pool.QueryRow(ctx, `
 		SELECT id, name, description, rules, is_default, created_at, updated_at
@@ -84,7 +84,7 @@ func (r *Repository) List(ctx context.Context) ([]Strategy, error) {
 }
 
 // Update updates an existing strategy
-func (r *Repository) Update(ctx context.Context, id int, req UpdateStrategyRequest) (*Strategy, error) {
+func (r *Repository) Update(ctx context.Context, id int64, req UpdateStrategyRequest) (*Strategy, error) {
 	rulesJSON, err := json.Marshal(req.Rules)
 	if err != nil {
 		return nil, fmt.Errorf("marshaling rules: %w", err)
@@ -107,7 +107,7 @@ func (r *Repository) Update(ctx context.Context, id int, req UpdateStrategyReque
 }
 
 // Delete removes a strategy by ID
-func (r *Repository) Delete(ctx context.Context, id int) error {
+func (r *Repository) Delete(ctx context.Context, id int64) error {
 	result, err := r.pool.Exec(ctx, `DELETE FROM strategies WHERE id = $1`, id)
 	if err != nil {
 		return fmt.Errorf("deleting strategy: %w", err)
@@ -137,7 +137,7 @@ func (r *Repository) SaveRun(ctx context.Context, run *StrategyRun, createdBy in
 }
 
 // GetRuns retrieves execution history for a strategy
-func (r *Repository) GetRuns(ctx context.Context, strategyID int, limit int) ([]StrategyRun, error) {
+func (r *Repository) GetRuns(ctx context.Context, strategyID int64, limit int) ([]StrategyRun, error) {
 	if limit <= 0 {
 		limit = 10
 	}
@@ -176,7 +176,7 @@ func (r *Repository) GetRuns(ctx context.Context, strategyID int, limit int) ([]
 }
 
 // GetLatestRun returns the most recent run for a strategy
-func (r *Repository) GetLatestRun(ctx context.Context, strategyID int) (*StrategyRun, error) {
+func (r *Repository) GetLatestRun(ctx context.Context, strategyID int64) (*StrategyRun, error) {
 	var run StrategyRun
 	var resultsJSON []byte
 
@@ -273,7 +273,7 @@ type RunStats struct {
 }
 
 // GetRunStats returns aggregate statistics for a strategy's runs
-func (r *Repository) GetRunStats(ctx context.Context, strategyID int) (*RunStats, error) {
+func (r *Repository) GetRunStats(ctx context.Context, strategyID int64) (*RunStats, error) {
 	var stats RunStats
 	err := r.pool.QueryRow(ctx, `
 		SELECT

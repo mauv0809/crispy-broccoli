@@ -4,7 +4,7 @@ import "time"
 
 // BacktestConfig defines the parameters for running a backtest
 type BacktestConfig struct {
-	StrategyID     int       `json:"strategy_id"`
+	StrategyID     int64     `json:"strategy_id"`
 	StartDate      time.Time `json:"start_date"`
 	EndDate        time.Time `json:"end_date"`
 	RebalanceFreq  string    `json:"rebalance_freq"` // "monthly", "quarterly", "semi-annual", "annual"

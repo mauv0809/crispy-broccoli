@@ -67,7 +67,7 @@ func (h *StrategyHandler) ListStrategies(c echo.Context) error {
 // @Failure 404 {object} map[string]string
 // @Router /api/strategies/{id} [get]
 func (h *StrategyHandler) GetStrategy(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid strategy ID",
@@ -132,7 +132,7 @@ func (h *StrategyHandler) CreateStrategy(c echo.Context) error {
 // @Failure 404 {object} map[string]string
 // @Router /api/strategies/{id} [put]
 func (h *StrategyHandler) UpdateStrategy(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid strategy ID",
@@ -172,7 +172,7 @@ func (h *StrategyHandler) UpdateStrategy(c echo.Context) error {
 // @Failure 404 {object} map[string]string
 // @Router /api/strategies/{id} [delete]
 func (h *StrategyHandler) DeleteStrategy(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid strategy ID",
@@ -199,7 +199,7 @@ func (h *StrategyHandler) DeleteStrategy(c echo.Context) error {
 // @Failure 500 {object} map[string]string
 // @Router /api/strategies/{id}/run [post]
 func (h *StrategyHandler) RunStrategy(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid strategy ID",
@@ -250,7 +250,7 @@ func (h *StrategyHandler) RunStrategy(c echo.Context) error {
 // @Failure 404 {object} map[string]string
 // @Router /api/strategies/{id}/runs [get]
 func (h *StrategyHandler) GetStrategyRuns(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid strategy ID",
@@ -341,7 +341,7 @@ func (h *StrategyHandler) PreviewStrategy(c echo.Context) error {
 // @Failure 404 {object} map[string]string
 // @Router /api/strategies/{id}/stats [get]
 func (h *StrategyHandler) GetStrategyStats(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid strategy ID",
@@ -376,7 +376,7 @@ func (h *StrategyHandler) StrategiesPage(c echo.Context) error {
 
 // StrategyDetailPage renders the strategy detail/execution page
 func (h *StrategyHandler) StrategyDetailPage(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.Redirect(http.StatusFound, "/strategies")
 	}
@@ -397,7 +397,7 @@ func (h *StrategyHandler) NewStrategyPage(c echo.Context) error {
 
 // EditStrategyPage renders the edit strategy form
 func (h *StrategyHandler) EditStrategyPage(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.Redirect(http.StatusFound, "/strategies")
 	}
@@ -413,7 +413,7 @@ func (h *StrategyHandler) EditStrategyPage(c echo.Context) error {
 
 // RunStrategyHTMX executes a strategy and returns HTML results
 func (h *StrategyHandler) RunStrategyHTMX(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return Render(c, http.StatusBadRequest, views.FormError("Invalid strategy ID"))
 	}
@@ -444,7 +444,7 @@ func (h *StrategyHandler) RunStrategyHTMX(c echo.Context) error {
 
 // GetStrategyRunsHTMX returns run history as HTML
 func (h *StrategyHandler) GetStrategyRunsHTMX(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return Render(c, http.StatusBadRequest, views.FormError("Invalid strategy ID"))
 	}
@@ -515,7 +515,7 @@ func (h *StrategyHandler) DashboardStrategies(c echo.Context) error {
 func (h *StrategyHandler) DashboardRuns(c echo.Context) error {
 	// Get all strategies to look up names
 	strategies, _ := h.repo.List(c.Request().Context())
-	strategyNames := make(map[int]string)
+	strategyNames := make(map[int64]string)
 	for _, s := range strategies {
 		strategyNames[s.ID] = s.Name
 	}
@@ -561,7 +561,7 @@ type BacktestRequest struct {
 // @Failure 404 {object} map[string]string
 // @Router /api/strategies/{id}/backtest [post]
 func (h *StrategyHandler) RunBacktest(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return c.JSON(http.StatusBadRequest, map[string]string{
 			"error": "Invalid strategy ID",
@@ -628,7 +628,7 @@ func (h *StrategyHandler) RunBacktest(c echo.Context) error {
 
 // RunBacktestHTMX runs a backtest and returns HTML results
 func (h *StrategyHandler) RunBacktestHTMX(c echo.Context) error {
-	id, err := strconv.Atoi(c.Param("id"))
+	id, err := strconv.ParseInt(c.Param("id"), 10, 64)
 	if err != nil {
 		return Render(c, http.StatusBadRequest, views.FormError("Invalid strategy ID"))
 	}
