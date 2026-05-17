@@ -28,7 +28,7 @@ type DashboardData struct {
 }
 
 type RecentRun struct {
-	StrategyID   int
+	StrategyID   int64
 	StrategyName string
 	RunDate      string
 	Matches      int
@@ -177,7 +177,7 @@ func DashboardStrategies(strategies []DashboardStrategy) templ.Component {
 }
 
 type DashboardStrategy struct {
-	ID        int
+	ID        int64
 	Name      string
 	IsDefault bool
 	RunCount  int
@@ -282,7 +282,7 @@ func DashboardRuns(runs []DashboardRun) templ.Component {
 }
 
 type DashboardRun struct {
-	StrategyID   int
+	StrategyID   int64
 	StrategyName string
 	RunDate      string
 	Matches      int

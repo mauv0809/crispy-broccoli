@@ -7,7 +7,7 @@ import (
 
 // Strategy represents a stock screening strategy stored in the database
 type Strategy struct {
-	ID          int       `json:"id"`
+	ID          int64     `json:"id"`
 	Name        string    `json:"name"`
 	Description string    `json:"description"`
 	Rules       Rules     `json:"rules"`
@@ -53,8 +53,8 @@ type Recommendation struct {
 
 // StrategyRun represents a single execution of a strategy
 type StrategyRun struct {
-	ID              int              `json:"id"`
-	StrategyID      int              `json:"strategy_id"`
+	ID              int64            `json:"id"`
+	StrategyID      int64            `json:"strategy_id"`
 	RunAt           time.Time        `json:"run_at"`
 	Results         []Recommendation `json:"results"`
 	ExecutionTimeMs int              `json:"execution_time_ms"`
@@ -64,7 +64,7 @@ type StrategyRun struct {
 
 // RunResult is the response returned after executing a strategy
 type RunResult struct {
-	StrategyID      int              `json:"strategy_id"`
+	StrategyID      int64            `json:"strategy_id"`
 	StrategyName    string           `json:"strategy_name"`
 	RunAt           time.Time        `json:"run_at"`
 	ExecutionTimeMs int              `json:"execution_time_ms"`
