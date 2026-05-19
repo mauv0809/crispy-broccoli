@@ -13,6 +13,16 @@ import (
 	"github.com/mauv0809/crispy-broccoli/internal/db"
 )
 
+// PoolFrom is a convenience helper for test code that receives a pool as `any`
+// (e.g. passed through a generic helper). It panics if v is not *pgxpool.Pool.
+func PoolFrom(v any) *pgxpool.Pool {
+	p, ok := v.(*pgxpool.Pool)
+	if !ok {
+		panic("testutil.PoolFrom: expected *pgxpool.Pool")
+	}
+	return p
+}
+
 // OpenTestDB runs migrations and returns a connected pool. Auth-related
 // tables are truncated before the test runs.
 //

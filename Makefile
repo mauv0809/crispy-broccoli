@@ -1,8 +1,18 @@
-.PHONY: build run dev db-up db-down migrate-create templ-generate templ-watch css-build css-watch swagger tools setup
+.PHONY: build run dev db-up db-down migrate-create templ-generate templ-watch css-build css-watch swagger test tools setup
 
 # Build everything
 build: templ-generate css-build swagger
 	go build -o bin/app ./cmd/app
+
+# Run all tests serially across packages.
+#
+# `-p 1` is required because testutil.OpenTestDB shares one Postgres database
+# across every test package. Parallel package execution races on the
+# TRUNCATE+INSERT-system-user fixture and on cross-package writes to shared
+# tables (strategies, portfolios). Per-package isolation is a future option
+# (separate schemas) but not worth the complexity today.
+test:
+	go test -p 1 ./...
 
 # Run the application (migrations run automatically on startup)
 run: templ-generate css-build swagger

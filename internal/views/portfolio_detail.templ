@@ -1,0 +1,252 @@
+package views
+
+import (
+	"fmt"
+
+	"github.com/shopspring/decimal"
+
+	"github.com/mauv0809/crispy-broccoli/internal/portfolio"
+	"github.com/mauv0809/crispy-broccoli/internal/proposal"
+)
+
+// HoldingRow is one row of the portfolio holdings table.
+type HoldingRow struct {
+	Holding      portfolio.Holding
+	CurrentPrice decimal.Decimal
+	MarketValue  decimal.Decimal
+	WeightPct    decimal.Decimal
+	ReturnAmount decimal.Decimal
+	ReturnPct    decimal.Decimal
+}
+
+// HistoryEntry is one row in the proposal-history list on portfolio detail.
+type HistoryEntry struct {
+	Proposal proposal.Proposal
+	Summary  string // pre-rendered like "6 picks, all executed" or "5 of 6 executed"
+}
+
+// PortfolioDetailData bundles everything portfolio_detail.templ needs.
+// The handler builds this once per request.
+type PortfolioDetailData struct {
+	Portfolio       portfolio.Portfolio
+	StrategyName    string
+	StrategyVersion int
+	Holdings        []HoldingRow
+	History         []HistoryEntry
+	PendingProposal *proposal.Proposal
+	CurrentValue    decimal.Decimal
+	NetInvested     decimal.Decimal
+	ReturnAmount    decimal.Decimal
+	ReturnPct       decimal.Decimal
+}
+
+templ PortfolioDetail(d PortfolioDetailData) {
+	@Layout(d.Portfolio.Name) {
+		<div class="space-y-4 sm:space-y-6">
+			<header class="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
+				<div>
+					<h1 class="text-xl sm:text-2xl font-bold text-primary">{ d.Portfolio.Name }</h1>
+					<p class="text-base-content/70 text-sm mt-1">
+						{ d.StrategyName }
+						if d.StrategyVersion > 0 {
+							{ fmt.Sprintf(" v%d", d.StrategyVersion) }
+						}
+						{ " · " }
+						{ string(d.Portfolio.Cadence) }
+						{ " · " }
+						<span class={ statusBadgeClass(d.Portfolio.Status) }>{ string(d.Portfolio.Status) }</span>
+					</p>
+				</div>
+				if d.PendingProposal != nil {
+					<a class="btn btn-warning btn-sm"
+					   href={ templ.SafeURL(fmt.Sprintf("/portfolios/%d/proposals/%d", d.Portfolio.ID, d.PendingProposal.ID)) }>
+						Review pending rebalance
+					</a>
+				}
+			</header>
+
+			<section class="card bg-base-100 shadow-sm">
+				<div class="card-body p-4 sm:p-5 space-y-2">
+					<div class="flex flex-col sm:flex-row sm:items-baseline sm:gap-6 gap-1">
+						<div>
+							<div class="text-xs uppercase tracking-wide text-base-content/60">Current value</div>
+							<div class="text-2xl font-semibold">${ d.CurrentValue.StringFixed(2) }</div>
+						</div>
+						<div>
+							<div class="text-xs uppercase tracking-wide text-base-content/60">Net invested</div>
+							<div class="text-base">${ d.NetInvested.StringFixed(2) }</div>
+						</div>
+						<div>
+							<div class="text-xs uppercase tracking-wide text-base-content/60">Return</div>
+							<div class={ "text-base", returnColorClass(d.ReturnAmount) }>
+								{ formatReturn(d.ReturnAmount, d.ReturnPct) }
+							</div>
+						</div>
+					</div>
+				</div>
+			</section>
+
+			<section class="card bg-base-100 shadow-sm">
+				<div class="card-body p-4 sm:p-5 space-y-2">
+					<h2 class="text-lg font-semibold">Performance</h2>
+					<div class="relative h-64 sm:h-80">
+						<canvas id="performance-chart" data-portfolio-id={ fmt.Sprintf("%d", d.Portfolio.ID) }></canvas>
+					</div>
+					<p class="text-xs text-base-content/60">Portfolio value normalised to 1.0 at inception, compared to SPY.</p>
+				</div>
+			</section>
+			<script>
+(function() {
+	const el = document.getElementById('performance-chart');
+	if (!el) return;
+	const portfolioID = el.dataset.portfolioId;
+	fetch('/portfolios/' + portfolioID + '/performance.json')
+		.then(r => r.ok ? r.json() : null)
+		.then(data => {
+			if (!data || !data.points || data.points.length === 0) return;
+			const labels = data.points.map(p => p.date.split('T')[0]);
+			const portfolio = data.points.map(p => parseFloat(p.portfolio_normalised));
+			const spy = data.points.map(p => parseFloat(p.spy_normalised));
+			new Chart(el, {
+				type: 'line',
+				data: {
+					labels: labels,
+					datasets: [
+						{ label: 'Portfolio', data: portfolio, borderColor: '#3b82f6', backgroundColor: 'rgba(59,130,246,0.1)', tension: 0.2, pointRadius: 0 },
+						{ label: 'SPY',       data: spy,       borderColor: '#9ca3af', backgroundColor: 'rgba(156,163,175,0.1)', tension: 0.2, pointRadius: 0 },
+					],
+				},
+				options: {
+					responsive: true,
+					maintainAspectRatio: false,
+					interaction: { mode: 'index', intersect: false },
+					scales: {
+						y: {
+							ticks: { callback: v => v.toFixed(2) + 'x' },
+						},
+					},
+					plugins: {
+						legend: { position: 'bottom' },
+						tooltip: {
+							callbacks: {
+								label: ctx => ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(4) + 'x',
+							},
+						},
+					},
+				},
+			});
+		})
+		.catch(() => {/* swallow; the chart simply won't render */});
+})();
+			</script>
+
+			<section>
+				<h2 class="text-lg font-semibold mb-2">Holdings</h2>
+				if len(d.Holdings) == 0 {
+					<p class="text-sm text-base-content/70">No holdings yet.</p>
+				} else {
+					<div class="overflow-x-auto">
+						<table class="table table-sm">
+							<thead>
+								<tr>
+									<th>Ticker</th>
+									<th class="text-right">Shares</th>
+									<th class="text-right">Avg cost</th>
+									<th class="text-right">Price</th>
+									<th class="text-right">Value</th>
+									<th class="text-right">Weight</th>
+									<th class="text-right">Return</th>
+								</tr>
+							</thead>
+							<tbody>
+								for _, r := range d.Holdings {
+									<tr>
+										<td class="font-mono">{ r.Holding.Ticker }</td>
+										<td class="text-right">{ r.Holding.Shares.StringFixed(2) }</td>
+										<td class="text-right">${ avgCost(r.Holding).StringFixed(2) }</td>
+										<td class="text-right">${ r.CurrentPrice.StringFixed(2) }</td>
+										<td class="text-right">${ r.MarketValue.StringFixed(2) }</td>
+										<td class="text-right">{ r.WeightPct.StringFixed(1) }%</td>
+										<td class={ "text-right", returnColorClass(r.ReturnAmount) }>
+											{ formatReturn(r.ReturnAmount, r.ReturnPct) }
+										</td>
+									</tr>
+								}
+							</tbody>
+						</table>
+					</div>
+				}
+			</section>
+
+			<section class="card bg-base-100 shadow-sm">
+				<div class="card-body p-4 sm:p-5">
+					<h2 class="text-lg font-semibold mb-2">Lifecycle</h2>
+					<form method="POST" class="flex flex-wrap gap-2">
+						<input type="hidden" name="_csrf" value={ CSRFFromContext(ctx) }/>
+						if d.Portfolio.Status == portfolio.StatusActive {
+							<button class="btn btn-sm" formaction={ templ.SafeURL(fmt.Sprintf("/portfolios/%d/pause", d.Portfolio.ID)) }>Pause</button>
+						}
+						if d.Portfolio.Status == portfolio.StatusPaused {
+							<button class="btn btn-sm btn-primary" formaction={ templ.SafeURL(fmt.Sprintf("/portfolios/%d/resume", d.Portfolio.ID)) }>Resume</button>
+						}
+						if d.Portfolio.Status != portfolio.StatusArchived {
+							<button class="btn btn-sm btn-ghost" formaction={ templ.SafeURL(fmt.Sprintf("/portfolios/%d/archive", d.Portfolio.ID)) }>Archive</button>
+						}
+					</form>
+				</div>
+			</section>
+
+			<section>
+				<h2 class="text-lg font-semibold mb-2">History</h2>
+				if len(d.History) == 0 {
+					<p class="text-sm text-base-content/70">No proposals yet.</p>
+				} else {
+					<ul class="space-y-2">
+						for _, h := range d.History {
+							<li class="card bg-base-100 shadow-sm">
+								<div class="card-body p-3 sm:p-4">
+									<div class="flex items-center justify-between gap-2">
+										<span class="text-sm font-mono">{ h.Proposal.GeneratedAt.Format("Jan 2, 2006") }</span>
+										<span class={ "text-sm", proposalStatusClass(h.Proposal.Status) }>{ string(h.Proposal.Status) }</span>
+									</div>
+									<p class="text-sm text-base-content/70">{ h.Summary }</p>
+								</div>
+							</li>
+						}
+					</ul>
+				}
+			</section>
+		</div>
+	}
+}
+
+func statusBadgeClass(s portfolio.Status) string {
+	switch s {
+	case portfolio.StatusActive:
+		return "badge badge-success badge-sm"
+	case portfolio.StatusPaused:
+		return "badge badge-warning badge-sm"
+	default:
+		return "badge badge-ghost badge-sm"
+	}
+}
+
+func proposalStatusClass(s proposal.Status) string {
+	switch s {
+	case proposal.StatusAccepted:
+		return "text-success"
+	case proposal.StatusPartiallyAccepted:
+		return "text-warning"
+	case proposal.StatusSkipped, proposal.StatusExpired:
+		return "text-base-content/60"
+	default:
+		return "text-info"
+	}
+}
+
+func avgCost(h portfolio.Holding) decimal.Decimal {
+	if h.Shares.IsZero() {
+		return decimal.Zero
+	}
+	return h.CostBasis.Div(h.Shares).Round(2)
+}

@@ -76,8 +76,22 @@ definitions:
         description: Total percentage return
         type: number
     type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.Cadence:
+    enum:
+    - monthly
+    - quarterly
+    - semi_annual
+    - annual
+    type: string
+    x-enum-varnames:
+    - CadenceMonthly
+    - CadenceQuarterly
+    - CadenceSemiAnnual
+    - CadenceAnnual
   github_com_mauv0809_crispy-broccoli_internal_strategy.CreateStrategyRequest:
     properties:
+      default_cadence:
+        $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Cadence'
       description:
         type: string
       name:
@@ -236,10 +250,24 @@ definitions:
       total_runs:
         type: integer
     type: object
+  github_com_mauv0809_crispy-broccoli_internal_strategy.Status:
+    enum:
+    - draft
+    - verified
+    - archived
+    type: string
+    x-enum-varnames:
+    - StatusDraft
+    - StatusVerified
+    - StatusArchived
   github_com_mauv0809_crispy-broccoli_internal_strategy.Strategy:
     properties:
       created_at:
         type: string
+      current_version_id:
+        type: integer
+      default_cadence:
+        $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Cadence'
       description:
         type: string
       id:
@@ -250,6 +278,8 @@ definitions:
         type: string
       rules:
         $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Rules'
+      status:
+        $ref: '#/definitions/github_com_mauv0809_crispy-broccoli_internal_strategy.Status'
       updated_at:
         type: string
     type: object
@@ -415,6 +445,49 @@ paths:
           schema:
             $ref: '#/definitions/internal_handlers.IngestResponse'
       summary: Ingest daily stock prices
+      tags:
+      - ingestion
+  /admin/ingest/prices/nasdaq:
+    post:
+      consumes:
+      - application/json
+      description: Fetches daily prices from SHARADAR/SEP — bulk-friendly alternative
+        to /admin/ingest/prices (Tiingo)
+      parameters:
+      - description: Comma-separated tickers (defaults to batch of stocks needing
+          prices)
+        in: query
+        name: ticker
+        type: string
+      - description: Max tickers to fetch (default 200; SEP can handle hundreds per
+          request)
+        in: query
+        name: limit
+        type: integer
+      - description: Consider data stale after N days (default 3)
+        in: query
+        name: stale_days
+        type: integer
+      - description: Days to wait before retrying tickers with no data (default 7)
+        in: query
+        name: retry_days
+        type: integer
+      - description: Number of parallel API requests (default 4)
+        in: query
+        name: parallel
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+        "503":
+          description: Service Unavailable
+          schema:
+            $ref: '#/definitions/internal_handlers.IngestResponse'
+      summary: Ingest daily stock prices via Nasdaq Data Link
       tags:
       - ingestion
   /admin/ingest/sp500:

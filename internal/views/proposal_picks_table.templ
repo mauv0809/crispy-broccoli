@@ -1,0 +1,107 @@
+package views
+
+import (
+	"github.com/shopspring/decimal"
+
+	"github.com/mauv0809/crispy-broccoli/internal/proposal"
+)
+
+type PicksTableData struct {
+	ProposalID   int64
+	PortfolioID  int64
+	Picks        []proposal.Pick
+	DeployAmount decimal.Decimal
+}
+
+templ ProposalPicksTable(d PicksTableData) {
+	<div id="picks-table">
+		<div class="overflow-x-auto">
+			<table class="table table-sm">
+				<thead>
+					<tr>
+						<th>Ticker</th>
+						<th>Action</th>
+						<th class="text-right">Target weight</th>
+						<th class="text-right">Target shares</th>
+						<th class="text-right">Price</th>
+						<th class="text-right">Actual shares</th>
+						<th class="text-right">Actual price</th>
+						<th class="text-right">Fee</th>
+						<th class="text-center">Skip</th>
+					</tr>
+				</thead>
+				<tbody>
+					for _, p := range d.Picks {
+						<tr>
+							<td class="font-mono">{ p.Ticker }</td>
+							<td><span class={ "badge", actionBadgeClass(p.Action) }>{ string(p.Action) }</span></td>
+							<td class="text-right">{ p.TargetWeight.Mul(decimal.NewFromInt(100)).StringFixed(1) }%</td>
+							<td class="text-right">{ p.TargetShares.StringFixed(0) }</td>
+							<td class="text-right">${ p.PriceAtProposal.StringFixed(2) }</td>
+							<td class="text-right">
+								<input type="hidden" name="ticker" value={ p.Ticker }/>
+								<input class="input input-xs input-bordered w-24 text-right"
+								       name="actual_shares"
+								       value={ defaultActualShares(p) }
+								       form="accept-form"/>
+							</td>
+							<td class="text-right">
+								<input class="input input-xs input-bordered w-24 text-right"
+								       name="actual_price"
+								       value={ p.PriceAtProposal.StringFixed(2) }
+								       form="accept-form"/>
+							</td>
+							<td class="text-right">
+								<input class="input input-xs input-bordered w-20 text-right"
+								       name="fee"
+								       value="0"
+								       form="accept-form"/>
+							</td>
+							<td class="text-center">
+								<input class="checkbox checkbox-sm" type="checkbox"
+								       name="skip"
+								       value={ p.Ticker }
+								       form="accept-form"/>
+							</td>
+						</tr>
+					}
+				</tbody>
+			</table>
+		</div>
+		<div class="text-right text-sm text-base-content/70 mt-2">
+			Deploy amount: <span class="font-semibold">${ d.DeployAmount.StringFixed(2) }</span>
+		</div>
+	</div>
+}
+
+func actionBadgeClass(a proposal.Action) string {
+	switch a {
+	case proposal.ActionBuy:
+		return "badge-success"
+	case proposal.ActionSell:
+		return "badge-error"
+	case proposal.ActionAdd:
+		return "badge-info"
+	case proposal.ActionTrim:
+		return "badge-warning"
+	default:
+		return "badge-ghost"
+	}
+}
+
+// defaultActualShares pre-fills the per-row "actual shares" input with the
+// natural delta — matches the acceptor's defaulting logic so the user can
+// just click "Accept" and get sensible numbers.
+func defaultActualShares(p proposal.Pick) string {
+	switch p.Action {
+	case proposal.ActionBuy:
+		return p.TargetShares.StringFixed(0)
+	case proposal.ActionAdd:
+		return p.TargetShares.Sub(p.CurrentShares).StringFixed(0)
+	case proposal.ActionSell:
+		return p.CurrentShares.StringFixed(0)
+	case proposal.ActionTrim:
+		return p.CurrentShares.Sub(p.TargetShares).StringFixed(0)
+	}
+	return "0"
+}

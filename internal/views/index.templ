@@ -191,7 +191,7 @@ templ Index() {
 								hx-post="/admin/ingest/benchmark"
 								hx-target="#ingest-result"
 								hx-indicator="#ingest-loading"
-								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button, #nasdaq-buttons button"
 								title="Fetch SPY benchmark prices from Tiingo"
 							>
 								Benchmark (SPY)
@@ -201,7 +201,7 @@ templ Index() {
 								hx-post="/admin/ingest/prices?limit=10"
 								hx-target="#ingest-result"
 								hx-indicator="#ingest-loading"
-								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button, #nasdaq-buttons button"
 								title="Fetch daily prices for 10 stocks (uses rate limit)"
 							>
 								Prices (10)
@@ -211,12 +211,48 @@ templ Index() {
 								hx-post="/admin/ingest/prices?limit=25"
 								hx-target="#ingest-result"
 								hx-indicator="#ingest-loading"
-								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button, #nasdaq-buttons button"
 								title="Fetch daily prices for 25 stocks (uses rate limit)"
 							>
 								Prices (25)
 							</button>
 						</div>
+
+						<!-- Nasdaq SEP Price Data (bulk, 2 req/sec) -->
+						<div class="divider text-xs my-2">Nasdaq SEP Prices (bulk)</div>
+						<div id="nasdaq-buttons" class="flex flex-wrap gap-2">
+							<button
+								class="btn btn-sm btn-outline btn-primary"
+								hx-post="/admin/ingest/prices/nasdaq?limit=50"
+								hx-target="#ingest-result"
+								hx-indicator="#ingest-loading"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button, #nasdaq-buttons button"
+								title="Bulk-fetch up to 50 stocks from Sharadar SEP"
+							>
+								Prices (50)
+							</button>
+							<button
+								class="btn btn-sm btn-outline btn-primary"
+								hx-post="/admin/ingest/prices/nasdaq?limit=200"
+								hx-target="#ingest-result"
+								hx-indicator="#ingest-loading"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button, #nasdaq-buttons button"
+								title="Bulk-fetch up to 200 stocks from Sharadar SEP"
+							>
+								Prices (200)
+							</button>
+							<button
+								class="btn btn-sm btn-outline btn-primary"
+								hx-post="/admin/ingest/prices/nasdaq?limit=500&parallel=8"
+								hx-target="#ingest-result"
+								hx-indicator="#ingest-loading"
+								hx-disabled-elt="#ingest-buttons button, #tiingo-buttons button, #nasdaq-buttons button"
+								title="Bulk-fetch up to 500 stocks from Sharadar SEP with 8 parallel workers"
+							>
+								Prices (500, ‖8)
+							</button>
+						</div>
+
 						<div id="ingest-result" class="mt-2 text-xs sm:text-sm"></div>
 					</div>
 				</div>

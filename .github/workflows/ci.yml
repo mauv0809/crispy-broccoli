@@ -80,7 +80,10 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-      - run: go test ./...
+      # Packages share a single Postgres service; run them serially (-p 1)
+      # to avoid concurrent migrations / truncates stepping on each other.
+      # Mirrors `make test`.
+      - run: go test -p 1 ./...
 
   build:
     name: build

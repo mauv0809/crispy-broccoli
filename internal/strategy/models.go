@@ -7,13 +7,43 @@ import (
 
 // Strategy represents a stock screening strategy stored in the database
 type Strategy struct {
-	ID          int64     `json:"id"`
-	Name        string    `json:"name"`
-	Description string    `json:"description"`
-	Rules       Rules     `json:"rules"`
-	IsDefault   bool      `json:"is_default"`
-	CreatedAt   time.Time `json:"created_at"`
-	UpdatedAt   time.Time `json:"updated_at"`
+	ID               int64     `json:"id"`
+	Name             string    `json:"name"`
+	Description      string    `json:"description"`
+	Rules            Rules     `json:"rules"`
+	IsDefault        bool      `json:"is_default"`
+	Status           Status    `json:"status"`
+	DefaultCadence   *Cadence  `json:"default_cadence,omitempty"`
+	CurrentVersionID *int64    `json:"current_version_id,omitempty"`
+	CreatedAt        time.Time `json:"created_at"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+// Status represents the lifecycle state of a strategy.
+type Status string
+
+const (
+	// StatusDraft means the strategy can be edited freely but cannot be attached to a live portfolio.
+	StatusDraft Status = "draft"
+	// StatusVerified means the user has signed off on the strategy; only verified strategies can be attached to portfolios.
+	StatusVerified Status = "verified"
+	// StatusArchived is a terminal state; existing portfolios continue rebalancing on their pinned version, but no new portfolios can attach.
+	StatusArchived Status = "archived"
+)
+
+// Cadence is the rebalance frequency a strategy was backtested at; portfolios inherit it as their default rebalance cadence.
+type Cadence string
+
+const (
+	CadenceMonthly    Cadence = "monthly"
+	CadenceQuarterly  Cadence = "quarterly"
+	CadenceSemiAnnual Cadence = "semi_annual"
+	CadenceAnnual     Cadence = "annual"
+)
+
+// AllCadences returns the canonical list — used for UI dropdowns and validation.
+func AllCadences() []Cadence {
+	return []Cadence{CadenceMonthly, CadenceQuarterly, CadenceSemiAnnual, CadenceAnnual}
 }
 
 // Rules defines the composable rules structure for a strategy
@@ -90,9 +120,10 @@ func (r *Rules) Scan(src any) error {
 
 // CreateStrategyRequest is the request body for creating a strategy
 type CreateStrategyRequest struct {
-	Name        string `json:"name"`
-	Description string `json:"description"`
-	Rules       Rules  `json:"rules"`
+	Name           string   `json:"name"`
+	Description    string   `json:"description"`
+	Rules          Rules    `json:"rules"`
+	DefaultCadence *Cadence `json:"default_cadence,omitempty"`
 }
 
 // UpdateStrategyRequest is the request body for updating a strategy
