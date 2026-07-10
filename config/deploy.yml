@@ -71,7 +71,12 @@ accessories:
   db:
     image: postgres:18-alpine
     host: box.utiger.dk
-    port: 5432
+    # Bind the published port to loopback only. The app reaches Postgres over
+    # the Kamal Docker network (host `deepvalue-db`), so it never needs this
+    # published port; it exists solely for host-side admin (psql/migrations
+    # from the box). A bare `port: 5432` would publish on 0.0.0.0 — exposing
+    # Postgres on the VPS's public IP, gated only by an external firewall.
+    port: "127.0.0.1:5432:5432"
     env:
       clear:
         POSTGRES_DB: deepvalue
