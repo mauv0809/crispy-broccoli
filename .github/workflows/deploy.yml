@@ -8,7 +8,10 @@ on:
       command:
         description: "Kamal command to run"
         type: choice
-        options: [deploy, setup, rollback]
+        # reboot-db recreates the Postgres accessory container to pick up
+        # accessory config changes (e.g. port bindings). Neither deploy nor
+        # setup does this — accessory boot skips already-running containers.
+        options: [deploy, setup, rollback, reboot-db]
         default: setup
 
 # Default GITHUB_TOKEN scopes:
@@ -118,5 +121,10 @@ jobs:
         # The price (~10s) buys us "first deploy on a fresh box also works."
         run: |
           CMD="${{ inputs.command || 'setup' }}"
-          echo "Running: kamal $CMD"
-          kamal "$CMD"
+          if [ "$CMD" = "reboot-db" ]; then
+            echo "Running: kamal accessory reboot db"
+            kamal accessory reboot db
+          else
+            echo "Running: kamal $CMD"
+            kamal "$CMD"
+          fi
